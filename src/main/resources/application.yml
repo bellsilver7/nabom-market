@@ -7,6 +7,9 @@ spring:
 
 mybatis:
   mapper-locations: classpath:mapper/**/*.xml
+  # 이 패키지 아래 클래스는 XML에서 짧은 이름으로 쓸 수 있다.
+  # (resultType="com.example.nabom_market.product.Product" → resultType="Product")
+  type-aliases-package: com.example.nabom_market
   configuration:
     map-underscore-to-camel-case: true
 
