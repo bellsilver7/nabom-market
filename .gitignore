@@ -34,4 +34,8 @@ out/
 /.nb-gradle/
 
 ### VS Code ###
-.vscode/
+.vscode/*
+# 프로젝트 공통 설정은 공유한다 (개인 설정은 위 규칙으로 계속 무시됨)
+!.vscode/settings.json
+!.vscode/extensions.json
+!.vscode/java-formatter.xml

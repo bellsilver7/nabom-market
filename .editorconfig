@@ -1,0 +1,22 @@
+# 에디터 공통 설정. EditorConfig 플러그인이 있으면 IntelliJ에서도 동일하게 적용된다.
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+insert_final_newline = true
+trim_trailing_whitespace = true
+indent_style = space
+indent_size = 4
+
+[*.{yml,yaml,json}]
+indent_size = 2
+
+[*.md]
+trim_trailing_whitespace = false
+
+[*.{bat,cmd}]
+end_of_line = crlf
+
+[gradlew]
+end_of_line = lf

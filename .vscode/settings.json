@@ -1,0 +1,28 @@
+{
+  "editor.formatOnSave": true,
+  "editor.rulers": [120],
+  "files.trimTrailingWhitespace": true,
+  "files.insertFinalNewline": true,
+  "files.trimFinalNewlines": true,
+
+  "[java]": {
+    "editor.defaultFormatter": "redhat.java",
+    "editor.tabSize": 4,
+    "editor.insertSpaces": true,
+    "editor.codeActionsOnSave": {
+      "source.organizeImports": "explicit"
+    }
+  },
+
+  "java.format.settings.url": ".vscode/java-formatter.xml",
+  "java.format.settings.profile": "nabom",
+  "java.completion.importOrder": ["java", "javax", "jakarta", "org", "com", ""],
+  "java.saveActions.organizeImports": true,
+  "java.configuration.updateBuildConfiguration": "automatic",
+
+  "[xml]": { "editor.tabSize": 4, "editor.insertSpaces": true },
+  "[sql]": { "editor.tabSize": 4, "editor.insertSpaces": true },
+  "[yaml]": { "editor.tabSize": 2, "editor.insertSpaces": true },
+  "[json]": { "editor.tabSize": 2, "editor.insertSpaces": true },
+  "[markdown]": { "files.trimTrailingWhitespace": false }
+}
