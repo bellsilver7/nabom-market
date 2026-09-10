@@ -31,9 +31,9 @@ Initializr 생성 직후 상태를 개발 가능한 상태로 만듭니다.
 
 **스키마**
 
-- [ ] `db/migration/V1__init_schema.sql` — 6개 테이블 생성
+- [x] `db/migration/V1__init_schema.sql` — 6개 테이블 생성
       (`member`, `product`, `cart`, `cart_item`, `orders`, `order_item`)
-- [ ] `db/migration/V2__insert_sample_data.sql` — 회원 1명, 상품 10개
+- [x] `db/migration/V2__insert_sample_data.sql` — 회원 1명, 상품 10개
 
 **공통 기반**
 
