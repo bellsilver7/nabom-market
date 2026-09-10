@@ -31,5 +31,14 @@
     <!-- switch 문 case 들여쓰기 -->
     <setting id="org.eclipse.jdt.core.formatter.indent_switchstatements_compare_to_switch" value="true"/>
     <setting id="org.eclipse.jdt.core.formatter.indent_switchstatements_compare_to_cases" value="true"/>
+
+    <!-- record 컴포넌트는 항상 한 줄에 하나씩.
+         49 = one-per-line(48) + force(1). 짧은 record까지 줄바꿈되는 게 싫으면 48로 낮춘다. -->
+    <setting id="org.eclipse.jdt.core.formatter.alignment_for_record_components" value="49"/>
+
+    <!-- @formatter:off / @formatter:on 주석으로 포매팅을 부분적으로 끌 수 있게 한다 -->
+    <setting id="org.eclipse.jdt.core.formatter.use_on_off_tags" value="true"/>
+    <setting id="org.eclipse.jdt.core.formatter.disabling_tag" value="@formatter:off"/>
+    <setting id="org.eclipse.jdt.core.formatter.enabling_tag" value="@formatter:on"/>
   </profile>
 </profiles>
