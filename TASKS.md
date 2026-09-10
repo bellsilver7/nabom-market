@@ -10,16 +10,16 @@
 Initializr 생성 직후 상태를 개발 가능한 상태로 만듭니다.
 코드를 한 줄도 안 쓰는 단계지만, 여기서 어긋나면 뒤에서 계속 걸립니다.
 
-- [ ] **git 초기화** — `git init`, 첫 커밋 (`chore: init project`)
-- [ ] **Gradle Kotlin DSL 전환** — `build.gradle` → `build.gradle.kts`, `settings.gradle` → `settings.gradle.kts`
-- [ ] **MyBatis 의존성 추가** — `org.mybatis.spring.boot:mybatis-spring-boot-starter:4.1.0`
+- [x] **git 초기화** — `git init`, 첫 커밋 (`chore: init project`)
+- [x] **Gradle Kotlin DSL 전환** — `build.gradle` → `build.gradle.kts`, `settings.gradle` → `settings.gradle.kts`
+- [x] **MyBatis 의존성 추가** — `org.mybatis.spring.boot:mybatis-spring-boot-starter:4.1.0`
       (3.0.x는 Boot 3.2~3.5 전용이라 이 프로젝트에선 안 됨)
-- [ ] **springdoc 추가** — `org.springdoc:springdoc-openapi-starter-webmvc-ui:3.1.1`
-- [ ] **`application.properties` → `application.yml`** 전환, MyBatis 설정과 SQL 로깅 추가
-- [ ] **SecurityConfig 작성** — 전 경로 `permitAll` (인증은 마지막에)
-- [ ] **`compose.yaml` 정리** — DB 이름 `mydatabase` → `nabom`
+- [x] **springdoc 추가** — `org.springdoc:springdoc-openapi-starter-webmvc-ui:3.1.1`
+- [x] **`application.properties` → `application.yml`** 전환, MyBatis 설정과 SQL 로깅 추가
+- [x] **SecurityConfig 작성** — 전 경로 `permitAll` (인증은 마지막에)
+- [x] **`compose.yaml` 정리** — DB 이름 `mydatabase` → `nabom`
 
-> **확인** — `./gradlew bootRun` 후 `curl localhost:8080/actuator/health`가 `{"status":"UP"}`.
+> **확인 (직접 실행 필요)** — `./gradlew bootRun` 후 `curl localhost:8080/actuator/health`가 `{"status":"UP"}`.
 > MySQL 컨테이너가 자동으로 떠 있어야 합니다 (`docker ps`).
 
 ---

@@ -33,73 +33,43 @@ ORM 대신 MyBatis를 선택한 것도 같은 맥락입니다.
 | Persistence | MyBatis 3 |
 | Database | MySQL 8 |
 | Migration | Flyway (`flyway-mysql`) |
-| Build | Gradle 9.7.1 |
+| Docs | springdoc-openapi 3.1 (Swagger UI) |
+| Build | Gradle 9.7.1 (Kotlin DSL) |
 | Monitoring | Spring Boot Actuator |
 | Test | JUnit 5, Testcontainers (MySQL) |
 | Infra | Docker Compose (`spring-boot-docker-compose`) |
 
 <br>
 
-## 초기 설정 TODO
+## 설정 메모
 
-Spring Initializr로 생성한 직후 상태입니다. 본격적인 개발 전에 아래를 먼저 정리합니다.
+Initializr 기본 생성물에서 조정한 부분과 그 이유입니다.
 
-### 1. MyBatis 의존성 추가
+**라이브러리 버전은 Boot 4 기준으로 고정**
 
-Initializr에 MyBatis 항목이 없어 수동으로 추가해야 합니다.
-Spring Boot 4.1을 쓰므로 스타터도 4.1.x 계열을 맞춰야 합니다. (3.0.x는 Boot 3.2~3.5 전용)
+Spring Boot BOM이 관리하지 않는 두 라이브러리는 `build.gradle.kts`에 버전을 직접 적었습니다.
+계열을 잘못 고르면 기동 시점에 깨지므로 주의가 필요합니다.
 
-```groovy
-implementation 'org.mybatis.spring.boot:mybatis-spring-boot-starter:4.1.0'
-testImplementation 'org.mybatis.spring.boot:mybatis-spring-boot-starter-test:4.1.0'
-```
+| 라이브러리 | 사용 버전 | 주의 |
+|---|---|---|
+| mybatis-spring-boot-starter | `4.1.0` | 널리 쓰이는 `3.0.x`는 Boot 3.2~3.5 전용 |
+| springdoc-openapi-starter-webmvc-ui | `3.1.1` | `2.x`는 Boot 3 전용 |
 
-### 2. Security 임시 개방
+**Security는 전 경로 개방 상태**
 
-Spring Security가 클래스패스에 있으면 모든 엔드포인트가 기본 인증으로 잠깁니다.
-인증을 붙이기 전까지는 전부 열어두고 시작합니다.
+Spring Security는 클래스패스에 존재하는 것만으로 모든 엔드포인트를 잠급니다.
+인증을 마지막 단계에 붙일 예정이므로 `common/config/SecurityConfig`에서 전부 열어 두었습니다.
+JWT 도입 시 이 클래스를 교체합니다.
 
-```java
-@Configuration
-public class SecurityConfig {
+**DataSource 설정을 적지 않는 이유**
 
-    @Bean
-    SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
-        return http
-                .csrf(CsrfConfigurer::disable)
-                .authorizeHttpRequests(auth -> auth.anyRequest().permitAll())
-                .build();
-    }
-}
-```
+`spring-boot-docker-compose`가 `compose.yaml`을 읽어 접속 정보를 주입하므로
+`application.yml`에 `spring.datasource.*`가 없습니다.
 
-### 3. application.yml 작성
+**컨테이너 이미지 태그 고정**
 
-현재 `application.properties`에 애플리케이션 이름만 있습니다.
-MyBatis 설정과 SQL 로깅을 추가합니다.
-
-```yaml
-mybatis:
-  mapper-locations: classpath:mapper/**/*.xml
-  configuration:
-    map-underscore-to-camel-case: true
-
-logging:
-  level:
-    com.example.nabom_market: debug
-```
-
-DB 접속 정보는 `spring-boot-docker-compose`가 `compose.yaml`을 읽어 자동으로 주입하므로
-`spring.datasource.*`를 직접 적을 필요가 없습니다.
-
-### 4. 그 외
-
-- [ ] `compose.yaml`의 DB 이름을 `mydatabase` → `nabom`으로 변경
-- [ ] springdoc-openapi 추가 (`org.springdoc:springdoc-openapi-starter-webmvc-ui:3.1.1` — Boot 4 대응은 3.x 계열)
-- [ ] `git init` 및 첫 커밋
-- [ ] 베이스 패키지 `com.example.nabom_market` 유지 여부 결정
-
-<br>
+`compose.yaml`과 Testcontainers 모두 `mysql:latest` 대신 `mysql:8.4`를 사용합니다.
+`latest`는 시점에 따라 다른 메이저 버전이 내려올 수 있습니다.
 
 ## 구현 현황
 

@@ -1,0 +1,21 @@
+spring:
+  application:
+    name: nabom-market
+
+# DataSource 접속 정보는 spring-boot-docker-compose가
+# compose.yaml을 읽어 자동으로 주입하므로 여기에 적지 않는다.
+
+mybatis:
+  mapper-locations: classpath:mapper/**/*.xml
+  configuration:
+    map-underscore-to-camel-case: true
+
+springdoc:
+  swagger-ui:
+    path: /swagger-ui.html
+    operations-sorter: method
+
+logging:
+  level:
+    # Mapper 인터페이스가 이 패키지 아래에 있으므로 실행되는 SQL이 로그에 찍힌다.
+    com.example.nabom_market: debug
