@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.example.nabom_market.product.ProductMapper">
+
+    <sql id="columns">
+        id, name, price, stock, created_at, updated_at
+    </sql>
+
+    <select id="findById" resultType="Product">
+        SELECT <include refid="columns"/>
+        FROM product
+        WHERE id = #{id}
+    </select>
+
+    <select id="findAll" resultType="Product">
+        SELECT <include refid="columns"/>
+        FROM product
+        ORDER BY id DESC
+    </select>
+
+    <insert id="insert" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO product (name, price, stock)
+        VALUES (#{name}, #{price}, #{stock})
+    </insert>
+
+    <update id="update">
+        UPDATE product
+        SET name = #{name},
+            price = #{price},
+            stock = #{stock}
+        WHERE id = #{id}
+    </update>
+
+    <delete id="deleteById">
+        DELETE FROM product WHERE id = #{id}
+    </delete>
+
+</mapper>

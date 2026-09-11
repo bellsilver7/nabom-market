@@ -37,17 +37,17 @@ Initializr 생성 직후 상태를 개발 가능한 상태로 만듭니다.
 
 **공통 기반**
 
-- [ ] `common/exception` — `BusinessException`, `ErrorCode` enum, `GlobalExceptionHandler`
-- [ ] `common/response` — 에러 응답 DTO (`code`, `message`, `timestamp`)
+- [x] `common/exception` — `BusinessException`, `ErrorCode` enum, `GlobalExceptionHandler`
+- [x] `common/response` — 에러 응답 DTO (`code`, `message`, `timestamp`)
 
 **상품**
 
-- [ ] `Product` 도메인 객체
-- [ ] 요청/응답 DTO — `ProductCreateRequest`, `ProductResponse`
-- [ ] `ProductMapper` 인터페이스 + `resources/mapper/ProductMapper.xml`
-- [ ] `ProductService`
-- [ ] `ProductController` — 목록/단건/등록/수정/삭제
-- [ ] `@Valid` 검증 적용 (가격·재고 음수 불가 등)
+- [x] `Product` 도메인 객체
+- [x] 요청/응답 DTO — `ProductCreateRequest`, `ProductResponse`
+- [x] `ProductMapper` 인터페이스 + `resources/mapper/ProductMapper.xml`
+- [x] `ProductService`
+- [x] `ProductController` — 목록/단건/등록/수정/삭제
+- [x] `@Valid` 검증 적용 (가격·재고 음수 불가 등)
 
 > **확인** — Swagger UI에서 상품 등록 → 목록 조회가 되고,
 > 없는 ID 조회 시 정해둔 포맷의 404가 나옵니다.

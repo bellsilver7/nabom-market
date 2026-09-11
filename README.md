@@ -193,29 +193,29 @@ UPDATE product
 
 | Method | Endpoint | 설명 |
 |---|---|---|
-| `GET` | `/api/products` | 상품 목록 조회 |
-| `GET` | `/api/products/{id}` | 상품 단건 조회 |
-| `POST` | `/api/products` | 상품 등록 |
-| `PUT` | `/api/products/{id}` | 상품 수정 |
-| `DELETE` | `/api/products/{id}` | 상품 삭제 |
+| `GET` | `/api/v1/products` | 상품 목록 조회 |
+| `GET` | `/api/v1/products/{id}` | 상품 단건 조회 |
+| `POST` | `/api/v1/products` | 상품 등록 |
+| `PUT` | `/api/v1/products/{id}` | 상품 수정 |
+| `DELETE` | `/api/v1/products/{id}` | 상품 삭제 |
 
 ### 장바구니
 
 | Method | Endpoint | 설명 |
 |---|---|---|
-| `GET` | `/api/cart` | 장바구니 조회 |
-| `POST` | `/api/cart/items` | 장바구니에 상품 담기 |
-| `PATCH` | `/api/cart/items/{itemId}` | 수량 변경 |
-| `DELETE` | `/api/cart/items/{itemId}` | 항목 삭제 |
+| `GET` | `/api/v1/cart` | 장바구니 조회 |
+| `POST` | `/api/v1/cart/items` | 장바구니에 상품 담기 |
+| `PATCH` | `/api/v1/cart/items/{itemId}` | 수량 변경 |
+| `DELETE` | `/api/v1/cart/items/{itemId}` | 항목 삭제 |
 
 ### 주문
 
 | Method | Endpoint | 설명 |
 |---|---|---|
-| `POST` | `/api/orders` | 장바구니 기반 주문 생성 |
-| `GET` | `/api/orders` | 주문 목록 조회 |
-| `GET` | `/api/orders/{id}` | 주문 상세 조회 |
-| `POST` | `/api/orders/{id}/cancel` | 주문 취소 |
+| `POST` | `/api/v1/orders` | 장바구니 기반 주문 생성 |
+| `GET` | `/api/v1/orders` | 주문 목록 조회 |
+| `GET` | `/api/v1/orders/{id}` | 주문 상세 조회 |
+| `POST` | `/api/v1/orders/{id}/cancel` | 주문 취소 |
 
 ### 에러 응답 포맷
 
