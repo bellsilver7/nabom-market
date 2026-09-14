@@ -25,10 +25,6 @@ public class CartService {
     private final ProductMapper productMapper;
 
     public CartResponse getCart(Long memberId) {
-        if (memberId == null) {
-            throw new BusinessException(ErrorCode.INVALID_REQUEST, "X-MEMBER-ID 헤더가 없습니다.");
-        }
-
         Cart cart = getOrCreateCart(memberId);
 
         List<CartItemResponse> items = cartItemMapper.findByMemberId(memberId).stream()

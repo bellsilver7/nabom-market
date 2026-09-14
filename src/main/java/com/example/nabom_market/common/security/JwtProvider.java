@@ -35,4 +35,10 @@ public class JwtProvider {
     public long getExpiresInSeconds() {
         return expirationMinutes * 60;
     }
+
+    public Long getMemberId(String token) {
+        String subject = Jwts.parser().verifyWith(key).build().parseSignedClaims(token).getPayload().getSubject();
+
+        return Long.valueOf(subject);
+    }
 }

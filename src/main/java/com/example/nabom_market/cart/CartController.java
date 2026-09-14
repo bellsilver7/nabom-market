@@ -9,7 +9,6 @@ import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
@@ -17,6 +16,7 @@ import org.springframework.web.bind.annotation.RestController;
 import com.example.nabom_market.cart.dto.CartItemAddRequest;
 import com.example.nabom_market.cart.dto.CartItemUpdateRequest;
 import com.example.nabom_market.cart.dto.CartResponse;
+import com.example.nabom_market.common.security.LoginMember;
 
 import lombok.RequiredArgsConstructor;
 
@@ -28,25 +28,25 @@ public class CartController {
     private final CartService cartService;
 
     @GetMapping
-    public CartResponse getCart(@RequestHeader("X-MEMBER-ID") Long memberId) {
+    public CartResponse getCart(@LoginMember Long memberId) {
         return cartService.getCart(memberId);
     }
 
     @PostMapping("/items")
-    public CartResponse addItemToCart(@RequestHeader("X-MEMBER-ID") Long memberId,
+    public CartResponse addItemToCart(@LoginMember Long memberId,
             @Valid @RequestBody CartItemAddRequest request) {
         return cartService.addItem(memberId, request);
     }
 
     @PatchMapping("/items/{itemId}")
-    public CartResponse updateItem(@RequestHeader("X-MEMBER-ID") Long memberId, @PathVariable Long itemId,
+    public CartResponse updateItem(@LoginMember Long memberId, @PathVariable Long itemId,
             @Valid @RequestBody CartItemUpdateRequest request) {
         return cartService.updateItem(memberId, itemId, request);
     }
 
     @DeleteMapping("/items/{itemId}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
-    public void removeItemFromCart(@RequestHeader("X-MEMBER-ID") Long memberId, @PathVariable Long itemId) {
+    public void removeItemFromCart(@LoginMember Long memberId, @PathVariable Long itemId) {
         cartService.removeItem(memberId, itemId);
     }
 

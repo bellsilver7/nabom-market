@@ -21,6 +21,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.example.nabom_market.TestcontainersConfiguration;
+import com.example.nabom_market.common.security.JwtProvider;
 
 /**
  * 장바구니 API 명세 검증.
@@ -34,7 +35,7 @@ import com.example.nabom_market.TestcontainersConfiguration;
  * <ul>
  * <li>샘플 데이터의 회원 id=1, 장바구니 id=1
  * <li>상품 id=1 (재고 25), id=2 (재고 120), id=7 (재고 3), id=8 (재고 0)
- * <li>사용자 식별은 {@code X-MEMBER-ID} 헤더
+ * <li>인증은 {@code Authorization: Bearer <token>} 헤더
  * </ul>
  */
 @SpringBootTest
@@ -46,13 +47,21 @@ class CartApiTest {
 
         private static final String CART = "/api/v1/cart";
         private static final String ITEMS = "/api/v1/cart/items";
-        private static final String MEMBER = "X-MEMBER-ID";
+        private static final String AUTH = "Authorization";
 
         @Autowired
         private MockMvc mockMvc;
 
         @Autowired
         private JdbcTemplate jdbcTemplate;
+
+        @Autowired
+        private JwtProvider jwtProvider;
+
+        /** 해당 회원으로 인증된 Authorization 헤더 값을 만든다. */
+        private String bearer(long memberId) {
+                return "Bearer " + jwtProvider.createToken(memberId);
+        }
 
         @BeforeEach
         void setUp() {
@@ -61,7 +70,7 @@ class CartApiTest {
 
                 // 타인 소유 데이터 검증용 회원 2와 그의 장바구니
                 jdbcTemplate.update("""
-                                INSERT INTO member (id, email, name) VALUES (2, 'other@theres.co', '타인')
+                                INSERT INTO member (id, email, password, name) VALUES (2, 'other@theres.co', '', '타인')
                                 ON DUPLICATE KEY UPDATE email = VALUES(email)
                                 """);
                 jdbcTemplate.update("""
@@ -79,7 +88,7 @@ class CartApiTest {
         /** 상품을 담고 생성된 cart_item id를 돌려준다. */
         private Long addItem(long productId, int quantity) throws Exception {
                 mockMvc.perform(post(ITEMS)
-                                .header(MEMBER, 1)
+                                .header(AUTH, bearer(1))
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .content(addItemBody(productId, quantity)))
                                 .andExpect(status().isOk());
@@ -96,7 +105,7 @@ class CartApiTest {
                 @Test
                 @DisplayName("비어 있어도 404가 아니라 빈 배열을 담은 200을 준다")
                 void emptyCartReturnsOk() throws Exception {
-                        mockMvc.perform(get(CART).header(MEMBER, 1))
+                        mockMvc.perform(get(CART).header(AUTH, bearer(1)))
                                         .andExpect(status().isOk())
                                         .andExpect(jsonPath("$.items").isArray())
                                         .andExpect(jsonPath("$.items.length()").value(0))
@@ -108,7 +117,7 @@ class CartApiTest {
                 void itemContainsProductInfo() throws Exception {
                         addItem(1, 2); // 무쇠 주물 프라이팬 24cm, 68,000원
 
-                        mockMvc.perform(get(CART).header(MEMBER, 1))
+                        mockMvc.perform(get(CART).header(AUTH, bearer(1)))
                                         .andExpect(status().isOk())
                                         .andExpect(jsonPath("$.items[0].id").isNumber())
                                         .andExpect(jsonPath("$.items[0].productId").value(1))
@@ -124,7 +133,7 @@ class CartApiTest {
                         addItem(1, 2); // 68,000 x 2 = 136,000
                         addItem(2, 3); // 18,500 x 3 = 55,500
 
-                        mockMvc.perform(get(CART).header(MEMBER, 1))
+                        mockMvc.perform(get(CART).header(AUTH, bearer(1)))
                                         .andExpect(status().isOk())
                                         .andExpect(jsonPath("$.totalPrice").value(191500));
                 }
@@ -134,16 +143,16 @@ class CartApiTest {
                 void soldOutItemIsMarkedUnavailable() throws Exception {
                         addItem(8, 1); // 재고 0
 
-                        mockMvc.perform(get(CART).header(MEMBER, 1))
+                        mockMvc.perform(get(CART).header(AUTH, bearer(1)))
                                         .andExpect(status().isOk())
                                         .andExpect(jsonPath("$.items[0].available").value(false));
                 }
 
                 @Test
-                @DisplayName("X-MEMBER-ID 헤더가 없으면 400")
-                void missingMemberHeaderIsBadRequest() throws Exception {
+                @DisplayName("토큰이 없으면 401")
+                void missingTokenIsUnauthorized() throws Exception {
                         mockMvc.perform(get(CART))
-                                        .andExpect(status().isBadRequest());
+                                        .andExpect(status().isUnauthorized());
                 }
 
                 @Test
@@ -151,7 +160,7 @@ class CartApiTest {
                 void otherMembersItemsAreNotVisible() throws Exception {
                         jdbcTemplate.update("INSERT INTO cart_item (cart_id, product_id, quantity) VALUES (2, 1, 9)");
 
-                        mockMvc.perform(get(CART).header(MEMBER, 1))
+                        mockMvc.perform(get(CART).header(AUTH, bearer(1)))
                                         .andExpect(status().isOk())
                                         .andExpect(jsonPath("$.items.length()").value(0));
                 }
@@ -166,7 +175,7 @@ class CartApiTest {
                 @DisplayName("담으면 갱신된 장바구니 전체가 응답으로 온다")
                 void addReturnsUpdatedCart() throws Exception {
                         mockMvc.perform(post(ITEMS)
-                                        .header(MEMBER, 1)
+                                        .header(AUTH, bearer(1))
                                         .contentType(MediaType.APPLICATION_JSON)
                                         .content(addItemBody(1, 2)))
                                         .andExpect(status().isOk())
@@ -181,7 +190,7 @@ class CartApiTest {
                         addItem(1, 2);
                         addItem(1, 3);
 
-                        mockMvc.perform(get(CART).header(MEMBER, 1))
+                        mockMvc.perform(get(CART).header(AUTH, bearer(1)))
                                         .andExpect(status().isOk())
                                         .andExpect(jsonPath("$.items.length()").value(1))
                                         .andExpect(jsonPath("$.items[0].quantity").value(5));
@@ -196,7 +205,7 @@ class CartApiTest {
                 @DisplayName("존재하지 않는 상품이면 404 NOT_FOUND")
                 void addingUnknownProductIsNotFound() throws Exception {
                         mockMvc.perform(post(ITEMS)
-                                        .header(MEMBER, 1)
+                                        .header(AUTH, bearer(1))
                                         .contentType(MediaType.APPLICATION_JSON)
                                         .content(addItemBody(999999, 1)))
                                         .andExpect(status().isNotFound())
@@ -207,7 +216,7 @@ class CartApiTest {
                 @DisplayName("수량이 0이면 400 INVALID_REQUEST")
                 void zeroQuantityIsBadRequest() throws Exception {
                         mockMvc.perform(post(ITEMS)
-                                        .header(MEMBER, 1)
+                                        .header(AUTH, bearer(1))
                                         .contentType(MediaType.APPLICATION_JSON)
                                         .content(addItemBody(1, 0)))
                                         .andExpect(status().isBadRequest())
@@ -218,7 +227,7 @@ class CartApiTest {
                 @DisplayName("수량이 음수면 400")
                 void negativeQuantityIsBadRequest() throws Exception {
                         mockMvc.perform(post(ITEMS)
-                                        .header(MEMBER, 1)
+                                        .header(AUTH, bearer(1))
                                         .contentType(MediaType.APPLICATION_JSON)
                                         .content(addItemBody(1, -1)))
                                         .andExpect(status().isBadRequest());
@@ -228,7 +237,7 @@ class CartApiTest {
                 @DisplayName("productId가 빠지면 400")
                 void missingProductIdIsBadRequest() throws Exception {
                         mockMvc.perform(post(ITEMS)
-                                        .header(MEMBER, 1)
+                                        .header(AUTH, bearer(1))
                                         .contentType(MediaType.APPLICATION_JSON)
                                         .content("""
                                                         {"quantity": 1}
@@ -248,7 +257,7 @@ class CartApiTest {
                         Long itemId = addItem(1, 2);
 
                         mockMvc.perform(patch(ITEMS + "/" + itemId)
-                                        .header(MEMBER, 1)
+                                        .header(AUTH, bearer(1))
                                         .contentType(MediaType.APPLICATION_JSON)
                                         .content("""
                                                         {"quantity": 5}
@@ -265,7 +274,7 @@ class CartApiTest {
                         Long itemId = addItem(1, 2);
 
                         mockMvc.perform(patch(ITEMS + "/" + itemId)
-                                        .header(MEMBER, 1)
+                                        .header(AUTH, bearer(1))
                                         .contentType(MediaType.APPLICATION_JSON)
                                         .content("""
                                                         {"quantity": 0}
@@ -277,7 +286,7 @@ class CartApiTest {
                 @DisplayName("없는 itemId면 404")
                 void unknownItemIsNotFound() throws Exception {
                         mockMvc.perform(patch(ITEMS + "/999999")
-                                        .header(MEMBER, 1)
+                                        .header(AUTH, bearer(1))
                                         .contentType(MediaType.APPLICATION_JSON)
                                         .content("""
                                                         {"quantity": 3}
@@ -293,7 +302,7 @@ class CartApiTest {
                                         "SELECT id FROM cart_item WHERE cart_id = 2", Long.class);
 
                         mockMvc.perform(patch(ITEMS + "/" + otherItemId)
-                                        .header(MEMBER, 1)
+                                        .header(AUTH, bearer(1))
                                         .contentType(MediaType.APPLICATION_JSON)
                                         .content("""
                                                         {"quantity": 3}
@@ -318,17 +327,17 @@ class CartApiTest {
                 void removeReturnsNoContent() throws Exception {
                         Long itemId = addItem(1, 2);
 
-                        mockMvc.perform(delete(ITEMS + "/" + itemId).header(MEMBER, 1))
+                        mockMvc.perform(delete(ITEMS + "/" + itemId).header(AUTH, bearer(1)))
                                         .andExpect(status().isNoContent());
 
-                        mockMvc.perform(get(CART).header(MEMBER, 1))
+                        mockMvc.perform(get(CART).header(AUTH, bearer(1)))
                                         .andExpect(jsonPath("$.items.length()").value(0));
                 }
 
                 @Test
                 @DisplayName("없는 itemId면 404 — 500이 아니다")
                 void unknownItemIsNotFound() throws Exception {
-                        mockMvc.perform(delete(ITEMS + "/999999").header(MEMBER, 1))
+                        mockMvc.perform(delete(ITEMS + "/999999").header(AUTH, bearer(1)))
                                         .andExpect(status().isNotFound())
                                         .andExpect(jsonPath("$.code").value("NOT_FOUND"));
                 }
@@ -340,7 +349,7 @@ class CartApiTest {
                         Long otherItemId = jdbcTemplate.queryForObject(
                                         "SELECT id FROM cart_item WHERE cart_id = 2", Long.class);
 
-                        mockMvc.perform(delete(ITEMS + "/" + otherItemId).header(MEMBER, 1))
+                        mockMvc.perform(delete(ITEMS + "/" + otherItemId).header(AUTH, bearer(1)))
                                         .andExpect(status().isNotFound());
 
                         Integer remaining = jdbcTemplate.queryForObject(

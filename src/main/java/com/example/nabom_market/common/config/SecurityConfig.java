@@ -4,23 +4,35 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
+import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+
+import com.example.nabom_market.common.security.JwtAuthenticationEntryPoint;
+import com.example.nabom_market.common.security.JwtAuthenticationFilter;
+
+import lombok.RequiredArgsConstructor;
 
 /**
- * 인증 도입 전 임시 설정.
+ * JWT 기반 인증 설정.
  *
  * <p>
- * Spring Security가 클래스패스에 있으면 기본적으로 모든 엔드포인트가 잠기고
- * 콘솔에 랜덤 비밀번호가 출력된다. 현재는 {@code X-MEMBER-ID} 헤더로 사용자를 식별하므로
- * 모든 요청을 허용해 둔다.
+ * 세션을 만들지 않고({@code STATELESS}) 매 요청의 {@code Authorization: Bearer} 헤더로만
+ * 인증한다. 토큰 해석은 {@link JwtAuthenticationFilter}가, 인증 실패 응답은
+ * {@link JwtAuthenticationEntryPoint}가 담당한다.
  *
  * <p>
- * TODO: JWT 인증 도입 시 이 설정을 교체할 것.
+ * 상품 API는 쓰기 작업까지 전부 공개다. 관리자 역할 개념이 아직 없어서인데,
+ * 역할이 도입되면 POST/PUT/DELETE는 ADMIN으로 제한해야 한다.
  */
 @Configuration
+@RequiredArgsConstructor
 public class SecurityConfig {
+
+	private final JwtAuthenticationFilter jwtAuthenticationFilter;
+	private final JwtAuthenticationEntryPoint jwtAuthenticationEntryPoint;
 
 	@Bean
 	PasswordEncoder passwordEncoder() {
@@ -33,7 +45,15 @@ public class SecurityConfig {
 				.csrf(AbstractHttpConfigurer::disable)
 				.httpBasic(AbstractHttpConfigurer::disable)
 				.formLogin(AbstractHttpConfigurer::disable)
-				.authorizeHttpRequests(auth -> auth.anyRequest().permitAll())
+				.sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+				.authorizeHttpRequests(auth -> auth
+						.requestMatchers("/api/v1/auth/**").permitAll()
+						.requestMatchers("/api/v1/products/**").permitAll()
+						.requestMatchers("/swagger-ui/**", "/swagger-ui.html", "/v3/api-docs/**").permitAll()
+						.requestMatchers("/actuator/**").permitAll()
+						.anyRequest().authenticated())
+				.exceptionHandling(e -> e.authenticationEntryPoint(jwtAuthenticationEntryPoint))
+				.addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
 				.build();
 	}
 }

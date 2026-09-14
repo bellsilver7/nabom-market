@@ -20,6 +20,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.web.servlet.MockMvc;
 
 import com.example.nabom_market.TestcontainersConfiguration;
+import com.example.nabom_market.common.security.JwtProvider;
 
 /**
  * 주문 API 명세 검증.
@@ -41,7 +42,7 @@ import com.example.nabom_market.TestcontainersConfiguration;
 class OrderApiTest {
 
     private static final String ORDERS = "/api/v1/orders";
-    private static final String MEMBER = "X-MEMBER-ID";
+    private static final String AUTH = "Authorization";
 
     @Autowired
     private MockMvc mockMvc;
@@ -49,13 +50,21 @@ class OrderApiTest {
     @Autowired
     private JdbcTemplate jdbcTemplate;
 
+    @Autowired
+    private JwtProvider jwtProvider;
+
+    /** 해당 회원으로 인증된 Authorization 헤더 값을 만든다. */
+    private String bearer(long memberId) {
+        return "Bearer " + jwtProvider.createToken(memberId);
+    }
+
     @BeforeEach
     void setUp() {
         jdbcTemplate.update("DELETE FROM order_item");
         jdbcTemplate.update("DELETE FROM orders");
 
         jdbcTemplate.update("""
-                INSERT INTO member (id, email, name) VALUES (2, 'other@theres.co', '타인')
+                INSERT INTO member (id, email, password, name) VALUES (2, 'other@theres.co', '', '타인')
                 ON DUPLICATE KEY UPDATE email = VALUES(email)
                 """);
 
@@ -86,7 +95,7 @@ class OrderApiTest {
     /** 항목 하나짜리 주문을 만들고 생성된 주문 id를 돌려준다. */
     private Long createOrder(long memberId, long productId, int quantity) throws Exception {
         mockMvc.perform(post(ORDERS)
-                .header(MEMBER, memberId)
+                .header(AUTH, bearer(memberId))
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(orderBody(productId, quantity)))
                 .andExpect(status().isCreated());
@@ -109,7 +118,7 @@ class OrderApiTest {
         @DisplayName("요청한 항목으로 주문이 생성된다")
         void createsOrder() throws Exception {
             mockMvc.perform(post(ORDERS)
-                    .header(MEMBER, 1)
+                    .header(AUTH, bearer(1))
                     .contentType(MediaType.APPLICATION_JSON)
                     .content("""
                             {"items": [{"productId": 1, "quantity": 2},
@@ -144,7 +153,7 @@ class OrderApiTest {
                             """))
                     .andExpect(status().isOk());
 
-            mockMvc.perform(get(ORDERS + "/" + orderId).header(MEMBER, 1))
+            mockMvc.perform(get(ORDERS + "/" + orderId).header(AUTH, bearer(1)))
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$.items[0].orderPrice").value(68000))
                     .andExpect(jsonPath("$.totalPrice").value(136000));
@@ -154,7 +163,7 @@ class OrderApiTest {
         @DisplayName("재고가 부족하면 409 OUT_OF_STOCK")
         void outOfStockIsConflict() throws Exception {
             mockMvc.perform(post(ORDERS)
-                    .header(MEMBER, 1)
+                    .header(AUTH, bearer(1))
                     .contentType(MediaType.APPLICATION_JSON)
                     .content(orderBody(7, 5)))          // 상품 7 은 재고 3
                     .andExpect(status().isConflict())
@@ -167,7 +176,7 @@ class OrderApiTest {
             int stockBefore = stockOf(1);
 
             mockMvc.perform(post(ORDERS)
-                    .header(MEMBER, 1)
+                    .header(AUTH, bearer(1))
                     .contentType(MediaType.APPLICATION_JSON)
                     .content("""
                             {"items": [{"productId": 1, "quantity": 2},
@@ -189,7 +198,7 @@ class OrderApiTest {
         @DisplayName("존재하지 않는 상품이면 404")
         void unknownProductIsNotFound() throws Exception {
             mockMvc.perform(post(ORDERS)
-                    .header(MEMBER, 1)
+                    .header(AUTH, bearer(1))
                     .contentType(MediaType.APPLICATION_JSON)
                     .content(orderBody(999999, 1)))
                     .andExpect(status().isNotFound())
@@ -200,7 +209,7 @@ class OrderApiTest {
         @DisplayName("항목이 비어 있으면 400")
         void emptyItemsIsBadRequest() throws Exception {
             mockMvc.perform(post(ORDERS)
-                    .header(MEMBER, 1)
+                    .header(AUTH, bearer(1))
                     .contentType(MediaType.APPLICATION_JSON)
                     .content("""
                             {"items": []}
@@ -213,19 +222,20 @@ class OrderApiTest {
         @DisplayName("수량이 0이면 400")
         void zeroQuantityIsBadRequest() throws Exception {
             mockMvc.perform(post(ORDERS)
-                    .header(MEMBER, 1)
+                    .header(AUTH, bearer(1))
                     .contentType(MediaType.APPLICATION_JSON)
                     .content(orderBody(1, 0)))
                     .andExpect(status().isBadRequest());
         }
 
         @Test
-        @DisplayName("X-MEMBER-ID 헤더가 없으면 400")
-        void missingMemberHeaderIsBadRequest() throws Exception {
+        @DisplayName("토큰이 없으면 401")
+        void missingTokenIsUnauthorized() throws Exception {
             mockMvc.perform(post(ORDERS)
                     .contentType(MediaType.APPLICATION_JSON)
                     .content(orderBody(1, 1)))
-                    .andExpect(status().isBadRequest());
+                    .andExpect(status().isUnauthorized())
+                    .andExpect(jsonPath("$.code").value("UNAUTHORIZED"));
         }
     }
 
@@ -237,7 +247,7 @@ class OrderApiTest {
         @Test
         @DisplayName("주문이 없으면 빈 배열")
         void emptyListWhenNoOrder() throws Exception {
-            mockMvc.perform(get(ORDERS).header(MEMBER, 1))
+            mockMvc.perform(get(ORDERS).header(AUTH, bearer(1)))
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$.length()").value(0));
         }
@@ -248,7 +258,7 @@ class OrderApiTest {
             Long first = createOrder(1, 1, 1);
             Long second = createOrder(1, 2, 1);
 
-            mockMvc.perform(get(ORDERS).header(MEMBER, 1))
+            mockMvc.perform(get(ORDERS).header(AUTH, bearer(1)))
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$.length()").value(2))
                     .andExpect(jsonPath("$[0].id").value(second))
@@ -260,7 +270,7 @@ class OrderApiTest {
         void detailContainsItems() throws Exception {
             Long orderId = createOrder(1, 1, 2);
 
-            mockMvc.perform(get(ORDERS + "/" + orderId).header(MEMBER, 1))
+            mockMvc.perform(get(ORDERS + "/" + orderId).header(AUTH, bearer(1)))
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$.id").value(orderId))
                     .andExpect(jsonPath("$.status").value("PENDING"))
@@ -276,7 +286,7 @@ class OrderApiTest {
         void otherMembersOrderIsNotListed() throws Exception {
             createOrder(2, 1, 1);
 
-            mockMvc.perform(get(ORDERS).header(MEMBER, 1))
+            mockMvc.perform(get(ORDERS).header(AUTH, bearer(1)))
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$.length()").value(0));
         }
@@ -286,14 +296,14 @@ class OrderApiTest {
         void otherMembersOrderDetailIsNotFound() throws Exception {
             Long otherOrderId = createOrder(2, 1, 1);
 
-            mockMvc.perform(get(ORDERS + "/" + otherOrderId).header(MEMBER, 1))
+            mockMvc.perform(get(ORDERS + "/" + otherOrderId).header(AUTH, bearer(1)))
                     .andExpect(status().isNotFound());
         }
 
         @Test
         @DisplayName("없는 주문은 404")
         void unknownOrderIsNotFound() throws Exception {
-            mockMvc.perform(get(ORDERS + "/999999").header(MEMBER, 1))
+            mockMvc.perform(get(ORDERS + "/999999").header(AUTH, bearer(1)))
                     .andExpect(status().isNotFound())
                     .andExpect(jsonPath("$.code").value("NOT_FOUND"));
         }
@@ -309,7 +319,7 @@ class OrderApiTest {
         void cancelChangesStatus() throws Exception {
             Long orderId = createOrder(1, 1, 2);
 
-            mockMvc.perform(post(ORDERS + "/" + orderId + "/cancel").header(MEMBER, 1))
+            mockMvc.perform(post(ORDERS + "/" + orderId + "/cancel").header(AUTH, bearer(1)))
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$.status").value("CANCELLED"));
         }
@@ -321,7 +331,7 @@ class OrderApiTest {
             Long orderId = createOrder(1, 1, 2);
             assertThat(stockOf(1)).isEqualTo(before - 2);
 
-            mockMvc.perform(post(ORDERS + "/" + orderId + "/cancel").header(MEMBER, 1))
+            mockMvc.perform(post(ORDERS + "/" + orderId + "/cancel").header(AUTH, bearer(1)))
                     .andExpect(status().isOk());
 
             assertThat(stockOf(1)).isEqualTo(before);
@@ -332,10 +342,10 @@ class OrderApiTest {
         void cancellingTwiceIsConflict() throws Exception {
             Long orderId = createOrder(1, 1, 1);
 
-            mockMvc.perform(post(ORDERS + "/" + orderId + "/cancel").header(MEMBER, 1))
+            mockMvc.perform(post(ORDERS + "/" + orderId + "/cancel").header(AUTH, bearer(1)))
                     .andExpect(status().isOk());
 
-            mockMvc.perform(post(ORDERS + "/" + orderId + "/cancel").header(MEMBER, 1))
+            mockMvc.perform(post(ORDERS + "/" + orderId + "/cancel").header(AUTH, bearer(1)))
                     .andExpect(status().isConflict())
                     .andExpect(jsonPath("$.code").value("INVALID_ORDER_STATUS"));
         }
@@ -346,8 +356,8 @@ class OrderApiTest {
             int before = stockOf(1);
             Long orderId = createOrder(1, 1, 2);
 
-            mockMvc.perform(post(ORDERS + "/" + orderId + "/cancel").header(MEMBER, 1));
-            mockMvc.perform(post(ORDERS + "/" + orderId + "/cancel").header(MEMBER, 1));
+            mockMvc.perform(post(ORDERS + "/" + orderId + "/cancel").header(AUTH, bearer(1)));
+            mockMvc.perform(post(ORDERS + "/" + orderId + "/cancel").header(AUTH, bearer(1)));
 
             assertThat(stockOf(1)).isEqualTo(before);
         }
@@ -357,7 +367,7 @@ class OrderApiTest {
         void cancellingOtherMembersOrderIsNotFound() throws Exception {
             Long otherOrderId = createOrder(2, 1, 1);
 
-            mockMvc.perform(post(ORDERS + "/" + otherOrderId + "/cancel").header(MEMBER, 1))
+            mockMvc.perform(post(ORDERS + "/" + otherOrderId + "/cancel").header(AUTH, bearer(1)))
                     .andExpect(status().isNotFound());
 
             String status = jdbcTemplate.queryForObject(
@@ -368,7 +378,7 @@ class OrderApiTest {
         @Test
         @DisplayName("없는 주문을 취소하면 404")
         void cancellingUnknownOrderIsNotFound() throws Exception {
-            mockMvc.perform(post(ORDERS + "/999999/cancel").header(MEMBER, 1))
+            mockMvc.perform(post(ORDERS + "/999999/cancel").header(AUTH, bearer(1)))
                     .andExpect(status().isNotFound());
         }
     }
