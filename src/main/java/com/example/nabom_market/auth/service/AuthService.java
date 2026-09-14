@@ -4,10 +4,13 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.example.nabom_market.auth.dto.LoginRequest;
 import com.example.nabom_market.auth.dto.MemberResponse;
 import com.example.nabom_market.auth.dto.SignUpRequest;
+import com.example.nabom_market.auth.dto.TokenResponse;
 import com.example.nabom_market.common.exception.BusinessException;
 import com.example.nabom_market.common.exception.ErrorCode;
+import com.example.nabom_market.common.security.JwtProvider;
 import com.example.nabom_market.member.domain.Member;
 import com.example.nabom_market.member.mapper.MemberMapper;
 
@@ -19,6 +22,7 @@ public class AuthService {
 
     private final MemberMapper memberMapper;
     private final PasswordEncoder passwordEncoder;
+    private final JwtProvider jwtProvider;
 
     @Transactional
     public MemberResponse signUp(SignUpRequest request) {
@@ -31,5 +35,14 @@ public class AuthService {
         memberMapper.insert(member);
 
         return MemberResponse.from(member);
+    }
+
+    @Transactional
+    public TokenResponse login(LoginRequest request) {
+        Member member = memberMapper.findByEmail(request.email())
+                .filter(m -> passwordEncoder.matches(request.password(), m.getPassword()))
+                .orElseThrow(() -> new BusinessException(ErrorCode.UNAUTHORIZED, "이메일 또는 비밀번호가 올바르지 않습니다."));
+
+        return TokenResponse.of(jwtProvider.createToken(member.getId()), jwtProvider.getExpiresInSeconds());
     }
 }

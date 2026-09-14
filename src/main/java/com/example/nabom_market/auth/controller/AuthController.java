@@ -9,8 +9,10 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
+import com.example.nabom_market.auth.dto.LoginRequest;
 import com.example.nabom_market.auth.dto.MemberResponse;
 import com.example.nabom_market.auth.dto.SignUpRequest;
+import com.example.nabom_market.auth.dto.TokenResponse;
 import com.example.nabom_market.auth.service.AuthService;
 
 import lombok.RequiredArgsConstructor;
@@ -24,8 +26,13 @@ public class AuthController {
 
     @PostMapping("/signup")
     @ResponseStatus(HttpStatus.CREATED)
-    public MemberResponse postMethodName(@Valid @RequestBody SignUpRequest request) {
+    public MemberResponse signUp(@Valid @RequestBody SignUpRequest request) {
         return authService.signUp(request);
+    }
+
+    @PostMapping("/login")
+    public TokenResponse login(@Valid @RequestBody LoginRequest request) {
+        return authService.login(request);
     }
 
 }
