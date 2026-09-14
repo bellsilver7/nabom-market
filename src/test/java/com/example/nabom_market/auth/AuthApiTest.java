@@ -19,8 +19,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.web.servlet.MockMvc;
 
 import com.example.nabom_market.TestcontainersConfiguration;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import com.jayway.jsonpath.JsonPath;
 
 /**
  * 인증 API 명세 검증.
@@ -49,9 +48,6 @@ class AuthApiTest {
     @Autowired
     private JdbcTemplate jdbcTemplate;
 
-    @Autowired
-    private ObjectMapper objectMapper;
-
     @BeforeEach
     void setUp() {
         // 가입 테스트가 만든 회원 정리 (샘플 회원 1번은 남긴다)
@@ -76,8 +72,7 @@ class AuthApiTest {
                 .getResponse()
                 .getContentAsString();
 
-        JsonNode json = objectMapper.readTree(body);
-        return json.get("accessToken").asText();
+        return JsonPath.read(body, "$.accessToken");
     }
 
     private String bearer(String token) {
