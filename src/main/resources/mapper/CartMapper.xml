@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.example.nabom_market.cart.CartMapper">
+
+    <sql id="columns">
+        id, member_id, created_at
+    </sql>
+
+    <insert id="upsert">
+        INSERT INTO cart (member_id)
+        VALUES (#{memberId})
+        ON DUPLICATE KEY UPDATE
+        member_id = VALUES(member_id)
+    </insert>
+
+    <select id="findByMemberId" parameterType="long" resultType="Cart">
+        SELECT <include refid="columns"/>
+        FROM cart
+        WHERE member_id = #{memberId}
+    </select>
+
+</mapper>

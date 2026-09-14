@@ -2,19 +2,13 @@ package com.example.nabom_market.cart.dto;
 
 import java.util.List;
 
-import com.example.nabom_market.cart.Cart;
-
 public record CartResponse(
         Long id,
-        Long memberId,
-        java.time.LocalDateTime createdAt,
-        List<CartItemResponse> items) {
+        List<CartItemResponse> items,
+        int totalPrice) {
 
-    public static CartResponse from(Cart cart, List<CartItemResponse> items) {
+    public static CartResponse of(Long cartId, List<CartItemResponse> items) {
         return new CartResponse(
-                cart.getId(),
-                cart.getMemberId(),
-                cart.getCreatedAt(),
-                items);
+                cartId, items, items.stream().mapToInt(CartItemResponse::totalPrice).sum());
     }
 }

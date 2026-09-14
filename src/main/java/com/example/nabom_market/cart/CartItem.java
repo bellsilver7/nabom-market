@@ -11,21 +11,14 @@ public class CartItem {
 
     private Long id;
     private Long cartId;
-    private String productId;
+    private Long productId;
     private int quantity;
 
-    public CartItem(Long cartId, String productId, int quantity) {
+    public CartItem(Long cartId, Long productId, Integer quantity) {
+
         this.cartId = cartId;
         this.productId = productId;
         this.quantity = quantity;
-    }
-
-    public String getProductId() {
-        return productId;
-    }
-
-    public int getQuantity() {
-        return quantity;
     }
 
     public void setQuantity(int quantity) {
