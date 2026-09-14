@@ -7,8 +7,10 @@ import org.springframework.transaction.annotation.Transactional;
 
 import com.example.nabom_market.common.exception.BusinessException;
 import com.example.nabom_market.common.exception.ErrorCode;
+import com.example.nabom_market.common.response.PageResponse;
 import com.example.nabom_market.product.dto.ProductCreateRequest;
 import com.example.nabom_market.product.dto.ProductResponse;
+import com.example.nabom_market.product.dto.ProductSearchCondition;
 import com.example.nabom_market.product.dto.ProductUpdateRequest;
 
 import lombok.RequiredArgsConstructor;
@@ -24,6 +26,17 @@ public class ProductService {
         return productMapper.findAll().stream()
                 .map(ProductResponse::from)
                 .toList();
+    }
+
+    public PageResponse<ProductResponse> search(ProductSearchCondition condition) {
+        List<ProductResponse> content = productMapper.search(condition).stream()
+                .map(ProductResponse::from)
+                .toList();
+
+        long totalElements = productMapper.countBySearch(condition);
+
+        return PageResponse.of(content, condition.page(), condition.size(), totalElements);
+
     }
 
     public ProductResponse findById(Long id) {

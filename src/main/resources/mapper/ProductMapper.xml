@@ -7,16 +7,43 @@
         id, name, price, stock, created_at, updated_at
     </sql>
 
+    <sql id="searchWhere">
+        <where>
+            <if test="keyword != null"> AND name LIKE #{keywordPattern} ESCAPE '!' </if>
+            <if test="minPrice != null"> AND price &gt;= #{minPrice} </if>
+            <if test="maxPrice != null"> AND price &lt;= #{maxPrice} </if>
+            <if test="inStock"> AND stock &gt; 0 </if>
+        </where>
+    </sql>
+
     <select id="findById" resultType="Product">
-        SELECT <include refid="columns"/>
+        SELECT <include refid="columns" />
         FROM product
         WHERE id = #{id}
     </select>
 
     <select id="findAll" resultType="Product">
-        SELECT <include refid="columns"/>
+        SELECT <include refid="columns" />
         FROM product
         ORDER BY id DESC
+    </select>
+
+    <select id="search" resultType="Product">
+        SELECT <include refid="columns" />
+        FROM product
+        <include refid="searchWhere" />
+        <choose>
+            <when test="sort == 'price_asc'">  ORDER BY price ASC, id DESC  </when>
+            <when test="sort == 'price_desc'"> ORDER BY price DESC, id DESC </when>
+            <otherwise>                        ORDER BY created_at DESC, id DESC </otherwise>
+        </choose>
+        LIMIT #{size} OFFSET #{offset}
+    </select>
+
+    <select id="countBySearch" resultType="long">
+        SELECT count(*)
+        FROM product
+        <include refid="searchWhere" />
     </select>
 
     <insert id="insert" useGeneratedKeys="true" keyProperty="id">

@@ -5,12 +5,18 @@ import java.util.Optional;
 
 import org.apache.ibatis.annotations.Mapper;
 
+import com.example.nabom_market.product.dto.ProductSearchCondition;
+
 @Mapper
 public interface ProductMapper {
 
     Optional<Product> findById(Long id);
 
     List<Product> findAll();
+
+    List<Product> search(ProductSearchCondition condition);
+
+    long countBySearch(ProductSearchCondition condition);
 
     void insert(Product product);
 
