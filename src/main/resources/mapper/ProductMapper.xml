@@ -44,4 +44,16 @@
         )
     </select>
 
+    <update id="deductStock">
+        UPDATE product
+        SET stock = stock - #{quantity}
+        WHERE id = #{productId} AND stock >= #{quantity}
+    </update>
+
+    <update id="restoreStock">
+        UPDATE product
+        SET stock = stock + #{quantity}
+        WHERE id = #{productId}
+    </update>
+
 </mapper>

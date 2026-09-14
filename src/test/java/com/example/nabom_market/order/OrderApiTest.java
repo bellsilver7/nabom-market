@@ -18,7 +18,6 @@ import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.web.servlet.MockMvc;
-import org.springframework.transaction.annotation.Transactional;
 
 import com.example.nabom_market.TestcontainersConfiguration;
 
@@ -38,12 +37,10 @@ import com.example.nabom_market.TestcontainersConfiguration;
 @SpringBootTest
 @AutoConfigureMockMvc
 @Import(TestcontainersConfiguration.class)
-@Transactional
 @DisplayName("주문 API")
 class OrderApiTest {
 
     private static final String ORDERS = "/api/v1/orders";
-    private static final String CART_ITEMS = "/api/v1/cart/items";
     private static final String MEMBER = "X-MEMBER-ID";
 
     @Autowired
@@ -56,33 +53,42 @@ class OrderApiTest {
     void setUp() {
         jdbcTemplate.update("DELETE FROM order_item");
         jdbcTemplate.update("DELETE FROM orders");
-        jdbcTemplate.update("DELETE FROM cart_item");
 
         jdbcTemplate.update("""
                 INSERT INTO member (id, email, name) VALUES (2, 'other@theres.co', '타인')
                 ON DUPLICATE KEY UPDATE email = VALUES(email)
                 """);
+
+        // 클래스에 @Transactional 이 없다(= 자동 롤백이 없다).
+        // 서비스의 롤백을 실제로 관찰하기 위한 선택이므로, 상태는 직접 되돌린다.
         jdbcTemplate.update("""
-                INSERT INTO cart (id, member_id) VALUES (2, 2)
-                ON DUPLICATE KEY UPDATE member_id = VALUES(member_id)
+                UPDATE product
+                   SET stock = CASE id
+                       WHEN 1 THEN 25  WHEN 2 THEN 120 WHEN 3 THEN 40
+                       WHEN 4 THEN 60  WHEN 5 THEN 18  WHEN 6 THEN 35
+                       WHEN 7 THEN 3   WHEN 8 THEN 0   WHEN 9 THEN 200
+                       WHEN 10 THEN 75 ELSE stock END,
+                       price = CASE id
+                       WHEN 1 THEN 68000 ELSE price END
+                 WHERE id BETWEEN 1 AND 10
                 """);
     }
 
     // ------------------------------------------------------------------ helpers
 
-    private void addToCart(long memberId, long productId, int quantity) throws Exception {
-        mockMvc.perform(post(CART_ITEMS)
-                .header(MEMBER, memberId)
-                .contentType(MediaType.APPLICATION_JSON)
-                .content("""
-                        {"productId": %d, "quantity": %d}
-                        """.formatted(productId, quantity)))
-                .andExpect(status().isOk());
+    /** 주문 요청 본문을 만든다. */
+    private String orderBody(long productId, int quantity) {
+        return """
+                {"items": [{"productId": %d, "quantity": %d}]}
+                """.formatted(productId, quantity);
     }
 
-    /** 주문을 생성하고 생성된 주문 id를 돌려준다. */
-    private Long placeOrder(long memberId) throws Exception {
-        mockMvc.perform(post(ORDERS).header(MEMBER, memberId))
+    /** 항목 하나짜리 주문을 만들고 생성된 주문 id를 돌려준다. */
+    private Long createOrder(long memberId, long productId, int quantity) throws Exception {
+        mockMvc.perform(post(ORDERS)
+                .header(MEMBER, memberId)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(orderBody(productId, quantity)))
                 .andExpect(status().isCreated());
 
         return jdbcTemplate.queryForObject(
@@ -94,48 +100,33 @@ class OrderApiTest {
                 "SELECT stock FROM product WHERE id = ?", Integer.class, productId);
     }
 
-    private int cartItemCount(long memberId) {
-        return jdbcTemplate.queryForObject("""
-                SELECT COUNT(*) FROM cart_item ci
-                  JOIN cart c ON c.id = ci.cart_id
-                 WHERE c.member_id = ?
-                """, Integer.class, memberId);
-    }
-
     // ------------------------------------------------------------------
     @Nested
     @DisplayName("주문 생성 POST /api/v1/orders")
-    class Place {
+    class Create {
 
         @Test
-        @DisplayName("장바구니의 상품으로 주문이 생성된다")
-        void createsOrderFromCart() throws Exception {
-            addToCart(1, 1, 2);   // 68,000 x 2 = 136,000
-            addToCart(1, 2, 3);   // 18,500 x 3 =  55,500
-
-            mockMvc.perform(post(ORDERS).header(MEMBER, 1))
+        @DisplayName("요청한 항목으로 주문이 생성된다")
+        void createsOrder() throws Exception {
+            mockMvc.perform(post(ORDERS)
+                    .header(MEMBER, 1)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content("""
+                            {"items": [{"productId": 1, "quantity": 2},
+                                       {"productId": 2, "quantity": 3}]}
+                            """))
                     .andExpect(status().isCreated())
                     .andExpect(jsonPath("$.id").isNumber())
                     .andExpect(jsonPath("$.status").value("PENDING"))
                     .andExpect(jsonPath("$.items.length()").value(2))
-                    .andExpect(jsonPath("$.totalPrice").value(191500));
-        }
-
-        @Test
-        @DisplayName("주문하면 장바구니가 비워진다")
-        void cartIsClearedAfterOrder() throws Exception {
-            addToCart(1, 1, 2);
-            placeOrder(1);
-
-            assertThat(cartItemCount(1)).isZero();
+                    .andExpect(jsonPath("$.totalPrice").value(191500));   // 68,000x2 + 18,500x3
         }
 
         @Test
         @DisplayName("주문하면 그만큼 재고가 차감된다")
         void stockIsDeducted() throws Exception {
             int before = stockOf(1);
-            addToCart(1, 1, 2);
-            placeOrder(1);
+            createOrder(1, 1, 2);
 
             assertThat(stockOf(1)).isEqualTo(before - 2);
         }
@@ -143,8 +134,7 @@ class OrderApiTest {
         @Test
         @DisplayName("주문 항목은 주문 시점의 단가를 보관한다 — 이후 상품 가격이 바뀌어도 금액은 그대로")
         void orderPriceIsSnapshot() throws Exception {
-            addToCart(1, 1, 2);
-            Long orderId = placeOrder(1);
+            Long orderId = createOrder(1, 1, 2);
 
             // 상품 가격을 두 배로 인상
             mockMvc.perform(put("/api/v1/products/1")
@@ -163,9 +153,10 @@ class OrderApiTest {
         @Test
         @DisplayName("재고가 부족하면 409 OUT_OF_STOCK")
         void outOfStockIsConflict() throws Exception {
-            addToCart(1, 7, 5);   // 상품 7 은 재고 3
-
-            mockMvc.perform(post(ORDERS).header(MEMBER, 1))
+            mockMvc.perform(post(ORDERS)
+                    .header(MEMBER, 1)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(orderBody(7, 5)))          // 상품 7 은 재고 3
                     .andExpect(status().isConflict())
                     .andExpect(jsonPath("$.code").value("OUT_OF_STOCK"));
         }
@@ -175,10 +166,13 @@ class OrderApiTest {
         void allOrNothing() throws Exception {
             int stockBefore = stockOf(1);
 
-            addToCart(1, 1, 2);   // 재고 충분
-            addToCart(1, 7, 5);   // 재고 부족 (3개뿐)
-
-            mockMvc.perform(post(ORDERS).header(MEMBER, 1))
+            mockMvc.perform(post(ORDERS)
+                    .header(MEMBER, 1)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content("""
+                            {"items": [{"productId": 1, "quantity": 2},
+                                       {"productId": 7, "quantity": 5}]}
+                            """))
                     .andExpect(status().isConflict());
 
             assertThat(stockOf(1))
@@ -189,21 +183,48 @@ class OrderApiTest {
             Integer orderCount = jdbcTemplate.queryForObject(
                     "SELECT COUNT(*) FROM orders WHERE member_id = 1", Integer.class);
             assertThat(orderCount).as("주문이 남아 있으면 안 된다").isZero();
-
-            assertThat(cartItemCount(1)).as("장바구니도 비워지면 안 된다").isEqualTo(2);
         }
 
         @Test
-        @DisplayName("장바구니가 비어 있으면 400")
-        void emptyCartIsBadRequest() throws Exception {
-            mockMvc.perform(post(ORDERS).header(MEMBER, 1))
+        @DisplayName("존재하지 않는 상품이면 404")
+        void unknownProductIsNotFound() throws Exception {
+            mockMvc.perform(post(ORDERS)
+                    .header(MEMBER, 1)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(orderBody(999999, 1)))
+                    .andExpect(status().isNotFound())
+                    .andExpect(jsonPath("$.code").value("NOT_FOUND"));
+        }
+
+        @Test
+        @DisplayName("항목이 비어 있으면 400")
+        void emptyItemsIsBadRequest() throws Exception {
+            mockMvc.perform(post(ORDERS)
+                    .header(MEMBER, 1)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content("""
+                            {"items": []}
+                            """))
+                    .andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.code").value("INVALID_REQUEST"));
+        }
+
+        @Test
+        @DisplayName("수량이 0이면 400")
+        void zeroQuantityIsBadRequest() throws Exception {
+            mockMvc.perform(post(ORDERS)
+                    .header(MEMBER, 1)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(orderBody(1, 0)))
                     .andExpect(status().isBadRequest());
         }
 
         @Test
         @DisplayName("X-MEMBER-ID 헤더가 없으면 400")
         void missingMemberHeaderIsBadRequest() throws Exception {
-            mockMvc.perform(post(ORDERS))
+            mockMvc.perform(post(ORDERS)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(orderBody(1, 1)))
                     .andExpect(status().isBadRequest());
         }
     }
@@ -224,10 +245,8 @@ class OrderApiTest {
         @Test
         @DisplayName("최신 주문이 먼저 온다")
         void listIsOrderedByNewest() throws Exception {
-            addToCart(1, 1, 1);
-            Long first = placeOrder(1);
-            addToCart(1, 2, 1);
-            Long second = placeOrder(1);
+            Long first = createOrder(1, 1, 1);
+            Long second = createOrder(1, 2, 1);
 
             mockMvc.perform(get(ORDERS).header(MEMBER, 1))
                     .andExpect(status().isOk())
@@ -239,8 +258,7 @@ class OrderApiTest {
         @Test
         @DisplayName("상세 조회에는 주문 항목이 포함된다")
         void detailContainsItems() throws Exception {
-            addToCart(1, 1, 2);
-            Long orderId = placeOrder(1);
+            Long orderId = createOrder(1, 1, 2);
 
             mockMvc.perform(get(ORDERS + "/" + orderId).header(MEMBER, 1))
                     .andExpect(status().isOk())
@@ -256,8 +274,7 @@ class OrderApiTest {
         @Test
         @DisplayName("다른 회원의 주문은 목록에 보이지 않는다")
         void otherMembersOrderIsNotListed() throws Exception {
-            addToCart(2, 1, 1);
-            placeOrder(2);
+            createOrder(2, 1, 1);
 
             mockMvc.perform(get(ORDERS).header(MEMBER, 1))
                     .andExpect(status().isOk())
@@ -267,8 +284,7 @@ class OrderApiTest {
         @Test
         @DisplayName("다른 회원의 주문 상세는 404")
         void otherMembersOrderDetailIsNotFound() throws Exception {
-            addToCart(2, 1, 1);
-            Long otherOrderId = placeOrder(2);
+            Long otherOrderId = createOrder(2, 1, 1);
 
             mockMvc.perform(get(ORDERS + "/" + otherOrderId).header(MEMBER, 1))
                     .andExpect(status().isNotFound());
@@ -291,8 +307,7 @@ class OrderApiTest {
         @Test
         @DisplayName("취소하면 상태가 CANCELLED 로 바뀐다")
         void cancelChangesStatus() throws Exception {
-            addToCart(1, 1, 2);
-            Long orderId = placeOrder(1);
+            Long orderId = createOrder(1, 1, 2);
 
             mockMvc.perform(post(ORDERS + "/" + orderId + "/cancel").header(MEMBER, 1))
                     .andExpect(status().isOk())
@@ -303,8 +318,7 @@ class OrderApiTest {
         @DisplayName("취소하면 재고가 복구된다")
         void cancelRestoresStock() throws Exception {
             int before = stockOf(1);
-            addToCart(1, 1, 2);
-            Long orderId = placeOrder(1);
+            Long orderId = createOrder(1, 1, 2);
             assertThat(stockOf(1)).isEqualTo(before - 2);
 
             mockMvc.perform(post(ORDERS + "/" + orderId + "/cancel").header(MEMBER, 1))
@@ -316,8 +330,7 @@ class OrderApiTest {
         @Test
         @DisplayName("이미 취소된 주문을 다시 취소하면 409 INVALID_ORDER_STATUS")
         void cancellingTwiceIsConflict() throws Exception {
-            addToCart(1, 1, 1);
-            Long orderId = placeOrder(1);
+            Long orderId = createOrder(1, 1, 1);
 
             mockMvc.perform(post(ORDERS + "/" + orderId + "/cancel").header(MEMBER, 1))
                     .andExpect(status().isOk());
@@ -331,8 +344,7 @@ class OrderApiTest {
         @DisplayName("두 번 취소해도 재고가 두 번 복구되지는 않는다")
         void stockIsRestoredOnlyOnce() throws Exception {
             int before = stockOf(1);
-            addToCart(1, 1, 2);
-            Long orderId = placeOrder(1);
+            Long orderId = createOrder(1, 1, 2);
 
             mockMvc.perform(post(ORDERS + "/" + orderId + "/cancel").header(MEMBER, 1));
             mockMvc.perform(post(ORDERS + "/" + orderId + "/cancel").header(MEMBER, 1));
@@ -343,8 +355,7 @@ class OrderApiTest {
         @Test
         @DisplayName("다른 회원의 주문은 취소되지 않고 404")
         void cancellingOtherMembersOrderIsNotFound() throws Exception {
-            addToCart(2, 1, 1);
-            Long otherOrderId = placeOrder(2);
+            Long otherOrderId = createOrder(2, 1, 1);
 
             mockMvc.perform(post(ORDERS + "/" + otherOrderId + "/cancel").header(MEMBER, 1))
                     .andExpect(status().isNotFound());

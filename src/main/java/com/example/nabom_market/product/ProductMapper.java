@@ -19,4 +19,8 @@ public interface ProductMapper {
     int deleteById(Long id);
 
     boolean existsById(Long id);
+
+    boolean deductStock(Long productId, int quantity);
+
+    void restoreStock(Long productId, int quantity);
 }
