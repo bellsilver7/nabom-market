@@ -24,6 +24,7 @@ repositories {
 // springdoc 3.x = Spring Boot 4 대응 (2.x는 Boot 3 전용)
 val mybatisVersion = "4.1.0"
 val springdocVersion = "3.1.1"
+val jjwtVersion = "0.13.0"
 
 dependencies {
 	implementation("org.springframework.boot:spring-boot-starter-actuator")
@@ -34,6 +35,11 @@ dependencies {
 	implementation("org.flywaydb:flyway-mysql")
 	implementation("org.mybatis.spring.boot:mybatis-spring-boot-starter:$mybatisVersion")
 	implementation("org.springdoc:springdoc-openapi-starter-webmvc-ui:$springdocVersion")
+
+	// JWT — api 는 컴파일 시점, impl/jackson 은 런타임에만 필요하다.
+	implementation("io.jsonwebtoken:jjwt-api:$jjwtVersion")
+	runtimeOnly("io.jsonwebtoken:jjwt-impl:$jjwtVersion")
+	runtimeOnly("io.jsonwebtoken:jjwt-jackson:$jjwtVersion")
 
 	compileOnly("org.projectlombok:lombok")
 	annotationProcessor("org.projectlombok:lombok")

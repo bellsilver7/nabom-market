@@ -13,6 +13,12 @@ mybatis:
   configuration:
     map-underscore-to-camel-case: true
 
+# JWT 서명 키. HS256 은 최소 256비트(32바이트) 이상을 요구한다.
+# 운영에서는 반드시 환경변수로 주입하고 저장소에 커밋하지 않는다.
+jwt:
+  secret: ${JWT_SECRET:nabom-market-local-development-secret-key-do-not-use-in-production}
+  expiration-minutes: 60
+
 springdoc:
   swagger-ui:
     path: /swagger-ui.html
