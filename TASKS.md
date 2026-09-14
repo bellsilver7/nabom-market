@@ -58,12 +58,12 @@ Initializr 생성 직후 상태를 개발 가능한 상태로 만듭니다.
 
 MyBatis에서 1:N 관계를 처음 다루는 단계입니다.
 
-- [ ] `X-MEMBER-ID` 헤더에서 회원 ID를 꺼내는 `@LoginMember` 아규먼트 리졸버
+- [x] `X-MEMBER-ID` 헤더에서 회원 ID를 꺼내는 `@LoginMember` 아규먼트 리졸버
       (또는 일단 컨트롤러 파라미터로 직접 받기)
-- [ ] `Cart`, `CartItem` 도메인 객체
-- [ ] `CartMapper` + XML — **`resultMap`의 `<collection>`으로 장바구니 + 항목을 한 번에 조회**
-- [ ] 담기 — 이미 담긴 상품이면 수량 증가 (`ON DUPLICATE KEY UPDATE` 고려)
-- [ ] 조회 / 수량 변경 / 항목 삭제
+- [x] `Cart`, `CartItem` 도메인 객체
+- [x] `CartMapper` + XML — **`resultMap`의 `<collection>`으로 장바구니 + 항목을 한 번에 조회**
+- [x] 담기 — 이미 담긴 상품이면 수량 증가 (`ON DUPLICATE KEY UPDATE` 고려)
+- [x] 조회 / 수량 변경 / 항목 삭제
 
 > **확인** — 같은 상품을 두 번 담았을 때 행이 늘지 않고 수량만 증가합니다.
 > 장바구니 조회 시 쿼리가 **1번만** 나가는지 로그로 확인하세요.
@@ -74,13 +74,13 @@ MyBatis에서 1:N 관계를 처음 다루는 단계입니다.
 
 이 프로젝트의 핵심입니다. 나머지는 여기에 도달하기 위한 준비였습니다.
 
-- [ ] `Order`, `OrderItem` 도메인 객체, `OrderStatus` enum
-- [ ] **재고 차감 SQL** — 조건부 UPDATE, 반환 행 수가 0이면 `OUT_OF_STOCK` 예외
-- [ ] **주문 생성** — `@Transactional` 안에서
+- [x] `Order`, `OrderItem` 도메인 객체, `OrderStatus` enum
+- [x] **재고 차감 SQL** — 조건부 UPDATE, 반환 행 수가 0이면 `OUT_OF_STOCK` 예외
+- [x] **주문 생성** — `@Transactional` 안에서
       장바구니 조회 → 재고 차감 → 주문 저장 → 주문 항목 저장(`order_price` 복사) → 장바구니 비우기
-- [ ] 주문 목록 조회
-- [ ] 주문 상세 조회 — `<collection>`으로 항목까지
-- [ ] 주문 취소 — 상태 변경 + 재고 복구 (이미 취소된 주문이면 예외)
+- [x] 주문 목록 조회
+- [x] 주문 상세 조회 — `<collection>`으로 항목까지
+- [x] 주문 취소 — 상태 변경 + 재고 복구 (이미 취소된 주문이면 예외)
 
 > **확인** — 재고 3개인 상품을 5개 주문하면 409가 나오고,
 > **DB의 재고가 그대로여야 합니다.** (트랜잭션이 롤백됐다는 뜻)
