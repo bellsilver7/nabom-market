@@ -29,14 +29,14 @@ ORM 대신 MyBatis를 선택한 것도 같은 맥락입니다.
 | Language | Java 21 (toolchain) |
 | Framework | Spring Boot 4.1.1 |
 | Web | Spring Web MVC |
-| Security | Spring Security |
-| Persistence | MyBatis 3 |
+| Security | Spring Security 7 + JWT (jjwt 0.13) |
+| Persistence | MyBatis 4.1 |
 | Database | MySQL 8 |
 | Migration | Flyway (`flyway-mysql`) |
 | Docs | springdoc-openapi 3.1 (Swagger UI) |
 | Build | Gradle 9.7.1 (Kotlin DSL) |
 | Monitoring | Spring Boot Actuator |
-| Test | JUnit 5, Testcontainers (MySQL) |
+| Test | JUnit 5, MockMvc, Testcontainers (MySQL) |
 | Infra | Docker Compose (`spring-boot-docker-compose`) |
 
 <br>
@@ -54,12 +54,20 @@ Spring Boot BOM이 관리하지 않는 두 라이브러리는 `build.gradle.kts`
 |---|---|---|
 | mybatis-spring-boot-starter | `4.1.0` | 널리 쓰이는 `3.0.x`는 Boot 3.2~3.5 전용 |
 | springdoc-openapi-starter-webmvc-ui | `3.1.1` | `2.x`는 Boot 3 전용 |
+| jjwt | `0.13.0` | `0.12` 부터 API가 바뀌었다 (`subject()`, `expiration()`) |
 
-**Security는 전 경로 개방 상태**
+한 가지 더. **Boot 4는 Jackson 3을 씁니다.** 패키지가 `com.fasterxml.jackson`에서
+`tools.jackson`으로 바뀌어서, 인터넷의 Boot 3 예제를 그대로 붙이면
+`ObjectMapper` 빈을 못 찾습니다.
 
-Spring Security는 클래스패스에 존재하는 것만으로 모든 엔드포인트를 잠급니다.
-인증을 마지막 단계에 붙일 예정이므로 `common/config/SecurityConfig`에서 전부 열어 두었습니다.
-JWT 도입 시 이 클래스를 교체합니다.
+**Security는 세션 없는 JWT 방식**
+
+`SessionCreationPolicy.STATELESS`로 세션을 만들지 않고, 매 요청의
+`Authorization: Bearer` 헤더만으로 인증합니다. 서버가 기억하는 상태가 없으므로
+`JSESSIONID` 쿠키도 나가지 않습니다.
+
+토큰 서명 키는 `JWT_SECRET` 환경변수로 주입하고, 없으면 로컬 개발용 기본값을 씁니다.
+운영에서 쓸 값이 아니라는 뜻을 기본값 문자열 자체에 적어 두었습니다.
 
 **DataSource 설정을 적지 않는 이유**
 
@@ -93,13 +101,21 @@ JWT 도입 시 이 클래스를 교체합니다.
 - [x] 주문 목록 / 단건 조회
 - [x] 주문 취소 — 재고 복구, 중복 취소 방지
 
+**인증**
+
+- [x] 회원가입 — 이메일 중복 검사, BCrypt 해시
+- [x] 로그인 — JWT 액세스 토큰 발급
+- [x] 토큰 검증 필터 + 인증 실패 401 응답
+- [x] `@LoginMember` 로 컨트롤러에 회원 id 주입
+- [ ] 리프레시 토큰 / 토큰 무효화
+
 **공통**
 
 - [x] 전역 예외 처리 (`ResponseEntityExceptionHandler` 기반)
 - [x] 요청 값 검증 (`@Valid`)
 - [x] Flyway 마이그레이션
 - [x] Swagger 문서화
-- [x] Testcontainers 기반 API 테스트 (상품·장바구니·주문 40건)
+- [x] Testcontainers 기반 API 테스트 (인증·상품·장바구니·주문 55건)
 
 <br>
 
@@ -117,6 +133,7 @@ erDiagram
     member {
         bigint id PK
         varchar email
+        varchar password
         varchar name
         datetime created_at
     }
@@ -189,35 +206,55 @@ UPDATE product
 
 ## API
 
-인증은 아직 도입 전이며, 임시로 `X-MEMBER-ID` 헤더로 사용자를 식별합니다.
+로그인으로 받은 액세스 토큰을 `Authorization: Bearer <token>` 헤더에 실어 보냅니다.
+아래 표의 **인증** 열이 `필요`인 엔드포인트는 토큰이 없으면 `401`로 거절됩니다.
+
+### 인증
+
+| Method | Endpoint | 설명 | 인증 |
+|---|---|---|---|
+| `POST` | `/api/v1/auth/signup` | 회원가입 | — |
+| `POST` | `/api/v1/auth/login` | 로그인, 액세스 토큰 발급 | — |
+
+```json
+// POST /api/v1/auth/login 응답
+{
+  "accessToken": "eyJhbGciOiJIUzI1NiJ9...",
+  "tokenType": "Bearer",
+  "expiresIn": 3600
+}
+```
 
 ### 상품
 
-| Method | Endpoint | 설명 |
-|---|---|---|
-| `GET` | `/api/v1/products` | 상품 목록 조회 |
-| `GET` | `/api/v1/products/{id}` | 상품 단건 조회 |
-| `POST` | `/api/v1/products` | 상품 등록 |
-| `PUT` | `/api/v1/products/{id}` | 상품 수정 |
-| `DELETE` | `/api/v1/products/{id}` | 상품 삭제 |
+| Method | Endpoint | 설명 | 인증 |
+|---|---|---|---|
+| `GET` | `/api/v1/products` | 상품 목록 조회 | — |
+| `GET` | `/api/v1/products/{id}` | 상품 단건 조회 | — |
+| `POST` | `/api/v1/products` | 상품 등록 | — |
+| `PUT` | `/api/v1/products/{id}` | 상품 수정 | — |
+| `DELETE` | `/api/v1/products/{id}` | 상품 삭제 | — |
+
+쓰기 작업은 원래 관리자만 할 수 있어야 하지만, 역할(role) 개념이 아직 없어
+전부 열어 둔 상태입니다.
 
 ### 장바구니
 
-| Method | Endpoint | 설명 |
-|---|---|---|
-| `GET` | `/api/v1/cart` | 장바구니 조회 |
-| `POST` | `/api/v1/cart/items` | 장바구니에 상품 담기 |
-| `PATCH` | `/api/v1/cart/items/{itemId}` | 수량 변경 |
-| `DELETE` | `/api/v1/cart/items/{itemId}` | 항목 삭제 |
+| Method | Endpoint | 설명 | 인증 |
+|---|---|---|---|
+| `GET` | `/api/v1/cart` | 장바구니 조회 | 필요 |
+| `POST` | `/api/v1/cart/items` | 장바구니에 상품 담기 | 필요 |
+| `PATCH` | `/api/v1/cart/items/{itemId}` | 수량 변경 | 필요 |
+| `DELETE` | `/api/v1/cart/items/{itemId}` | 항목 삭제 | 필요 |
 
 ### 주문
 
-| Method | Endpoint | 설명 |
-|---|---|---|
-| `POST` | `/api/v1/orders` | 주문 생성 (항목 목록을 본문으로) |
-| `GET` | `/api/v1/orders` | 주문 목록 조회 |
-| `GET` | `/api/v1/orders/{id}` | 주문 상세 조회 |
-| `POST` | `/api/v1/orders/{id}/cancel` | 주문 취소 |
+| Method | Endpoint | 설명 | 인증 |
+|---|---|---|---|
+| `POST` | `/api/v1/orders` | 주문 생성 (항목 목록을 본문으로) | 필요 |
+| `GET` | `/api/v1/orders` | 주문 목록 조회 | 필요 |
+| `GET` | `/api/v1/orders/{id}` | 주문 상세 조회 | 필요 |
+| `POST` | `/api/v1/orders/{id}/cancel` | 주문 취소 | 필요 |
 
 ### 에러 응답 포맷
 
@@ -234,9 +271,13 @@ UPDATE product
 | 상황 | 상태 코드 | 코드 |
 |---|---|---|
 | 요청 값 검증 실패 | `400` | `INVALID_REQUEST` |
+| 토큰이 없거나 유효하지 않음 | `401` | `UNAUTHORIZED` |
 | 리소스 없음 | `404` | `NOT_FOUND` |
 | 재고 부족 | `409` | `OUT_OF_STOCK` |
 | 취소 불가한 주문 | `409` | `INVALID_ORDER_STATUS` |
+| 이미 가입된 이메일 | `409` | `DUPLICATE_EMAIL` |
+
+남의 리소스에 접근하면 `403`이 아니라 `404`를 줍니다. 이유는 아래 기록에 적어 두었습니다.
 
 <br>
 
@@ -288,20 +329,28 @@ src/main/java/com/example/nabom_market
 │   └── dto
 ├── cart
 ├── order
-├── member
+├── auth                          # 회원가입 / 로그인
+├── member                        # Member 도메인과 매퍼
 └── common
     ├── exception                 # 커스텀 예외, GlobalExceptionHandler
     ├── response                  # 공통 응답 포맷
-    └── config                    # Security, MyBatis, Swagger 설정
+    ├── security                  # JwtProvider, 인증 필터, @LoginMember
+    └── config                    # Security, WebMvc 설정
 
 src/main/resources
 ├── mapper                        # Mapper XML
 │   ├── ProductMapper.xml
-│   ├── CartMapper.xml
-│   └── OrderMapper.xml
-├── db/migration                  # Flyway 스크립트 (V1__init.sql ...)
+│   ├── CartMapper.xml, CartItemMapper.xml
+│   ├── OrderMapper.xml, OrderItemMapper.xml
+│   └── MemberMapper.xml
+├── db/migration                  # Flyway 스크립트 (V1__init_schema.sql ...)
 └── application.yml
 ```
+
+`auth`와 `member`를 나눈 이유는 역할이 다르기 때문입니다.
+`member`는 회원이라는 **데이터**를 다루고, `auth`는 그 데이터를 이용한
+가입·로그인이라는 **행위**를 다룹니다. 나중에 회원 정보 수정이나 탈퇴가 생기면
+`member` 쪽에 컨트롤러가 붙습니다.
 
 Mapper 인터페이스는 도메인 패키지에, XML은 `resources/mapper`에 두고
 `mybatis.mapper-locations`로 연결합니다.
@@ -363,6 +412,41 @@ Mapper 인터페이스는 도메인 패키지에, XML은 `resources/mapper`에 �
   영향 행이 0이면 "없거나 내 것이 아니거나"를 구분하지 않고 404로 응답할 수 있다.
   403을 주면 그 리소스가 존재한다는 사실이 새어 나간다.
 
+### 필터에서 `chain.doFilter()`를 빼먹으면 모든 요청이 빈 200이 된다
+
+- **상황** — JWT 인증 필터를 붙이자 모든 API가 아무 에러 없이 200 + 빈 본문을 반환했다.
+  예외도 로그도 없었다.
+- **원인** — `doFilterInternal` 마지막에 `chain.doFilter(request, response)`가 없었다.
+  필터는 체인의 한 마디라서 직접 다음으로 넘겨야 `DispatcherServlet`까지 도달한다.
+  호출하지 않으면 거기서 요청 처리가 조용히 끝난다.
+- **배운 것** — 예외가 안 나는 버그가 제일 찾기 어렵다.
+  테스트에서 `status().isOk()`는 통과하고 `jsonPath`에서만 깨져서 원인이 더 멀어 보였다.
+
+### 인증 필터의 예외는 `@RestControllerAdvice`가 잡지 못한다
+
+- **상황** — 토큰 없이 요청했을 때 401 본문이 프로젝트의 `ErrorResponse` 포맷이 아니라
+  Security 기본 형식으로 나갔다.
+- **원인** — 전역 예외 처리기는 `DispatcherServlet` 안에서 동작한다.
+  Security 필터체인은 그보다 **앞**이라 아직 컨트롤러 세계에 진입하지 않았다.
+- **해결** — `AuthenticationEntryPoint`를 구현해 필터 단계의 401을 직접 쓰고,
+  본문은 같은 `ErrorResponse`로 맞췄다.
+  `ObjectMapper`는 `new`로 만들지 않고 주입받는다. 직접 만들면 `JavaTimeModule`이 없어
+  `LocalDateTime`이 배열로 직렬화되면서 다른 에러 응답과 포맷이 갈린다.
+- **배운 것** — 에러 처리기가 두 군데인 게 설계 실수처럼 보이지만,
+  요청이 지나는 계층이 둘이라 어쩔 수 없다.
+
+### 인증을 나중에 붙이면 테스트도 같이 고쳐야 한다
+
+- **상황** — `@LoginMember` 도입으로 컨트롤러 8곳을 바꾸자 장바구니·주문 테스트 40건이
+  한꺼번에 401로 깨졌다.
+- **정리** — 테스트에서 토큰은 로그인 API를 거치지 않고 `JwtProvider`로 직접 발급한다.
+  매 테스트에 로그인 왕복을 넣으면 검증 대상과 무관한 실패 지점이 늘고,
+  비밀번호가 없는 검증용 회원은 애초에 로그인할 수 없다.
+  로그인 흐름 자체는 `AuthApiTest`가 책임진다.
+- **덤** — `V3`에서 `password`를 `NOT NULL`로 추가하면서 테스트 픽스처의
+  `INSERT INTO member`가 깨졌다. 마이그레이션은 애플리케이션 코드만 보고 넘어가면
+  나중에 테스트에서 물린다.
+
 ### 주문 시점 가격을 복사해 두는 이유
 
 `order_item.order_price`는 주문 시점의 상품 단가를 복사한 값이다.
@@ -373,8 +457,9 @@ Mapper 인터페이스는 도메인 패키지에, XML은 `resources/mapper`에 �
 
 ## 앞으로
 
-- [ ] 장바구니에서 선택한 항목으로 주문 (`POST /orders/from-cart`)
-- [ ] Spring Security + JWT 기반 인증 — `X-MEMBER-ID` 헤더 제거
+- [ ] 리프레시 토큰과 로그아웃 — 지금은 액세스 토큰 1시간이 전부다
+- [ ] 관리자 역할 — 상품 쓰기 작업을 `ADMIN`으로 제한
+- [ ] 장바구니 비우기 (`DELETE /api/v1/cart/items`)
 - [ ] 동시 주문 부하 테스트 — 조건부 UPDATE 방식의 재고 정합성 검증
 - [ ] 상품 검색과 페이징 — 동적 쿼리 `<if>`, `<foreach>`
 - [ ] 인기 상품 Redis 캐싱
