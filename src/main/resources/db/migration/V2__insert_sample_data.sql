@@ -1,7 +1,7 @@
 -- 개발용 샘플 데이터
 --
 -- 회원은 id = 1로 고정한다. 인증을 붙이기 전까지 모든 요청에
--- `X-USER-ID: 1` 헤더를 넣어 이 회원으로 테스트한다.
+-- `X-MEMBER-ID: 1` 헤더를 넣어 이 회원으로 테스트한다.
 
 INSERT INTO member (id, email, name)
 VALUES (1, 'liam@theres.co', '리암');

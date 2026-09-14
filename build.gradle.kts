@@ -1,3 +1,5 @@
+import org.gradle.api.tasks.testing.logging.TestExceptionFormat
+
 plugins {
 	java
 	id("org.springframework.boot") version "4.1.1"
@@ -55,4 +57,15 @@ dependencies {
 
 tasks.named<Test>("test") {
 	useJUnitPlatform()
+
+	testLogging {
+		events("passed", "skipped", "failed")
+		exceptionFormat = TestExceptionFormat.FULL   // 단축된 스택트레이스 대신 전체 출력
+		showExceptions = true
+		showCauses = true
+		showStackTraces = true
+		// 평소에는 조용히, 필요할 때만 SQL 로그와 MockMvc 요청/응답 덤프까지 본다.
+		//   ./gradlew test -Pverbose
+		showStandardStreams = project.hasProperty("verbose")
+	}
 }

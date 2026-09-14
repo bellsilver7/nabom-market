@@ -58,7 +58,7 @@ Initializr 생성 직후 상태를 개발 가능한 상태로 만듭니다.
 
 MyBatis에서 1:N 관계를 처음 다루는 단계입니다.
 
-- [ ] `X-USER-ID` 헤더에서 회원 ID를 꺼내는 `@LoginMember` 아규먼트 리졸버
+- [ ] `X-MEMBER-ID` 헤더에서 회원 ID를 꺼내는 `@LoginMember` 아규먼트 리졸버
       (또는 일단 컨트롤러 파라미터로 직접 받기)
 - [ ] `Cart`, `CartItem` 도메인 객체
 - [ ] `CartMapper` + XML — **`resultMap`의 `<collection>`으로 장바구니 + 항목을 한 번에 조회**
@@ -104,7 +104,7 @@ MyBatis에서 1:N 관계를 처음 다루는 단계입니다.
 
 ## 이후 (선택)
 
-- [ ] Spring Security + JWT 인증 — `X-USER-ID` 제거
+- [ ] Spring Security + JWT 인증 — `X-MEMBER-ID` 제거
 - [ ] 동시 주문 부하 테스트로 재고 정합성 검증
 - [ ] 상품 검색 — 동적 쿼리 `<if>`, `<foreach>`
 - [ ] 인기 상품 Redis 캐싱
@@ -147,6 +147,6 @@ MyBatis에서 1:N 관계를 처음 다루는 단계입니다.
 
 **Security를 마지막에 붙이는 이유.** 처음부터 JWT를 넣으면 컨트롤러 하나 테스트할 때마다
 토큰을 발급받아야 해서 개발 속도가 크게 떨어집니다.
-`X-USER-ID` 헤더로 가다가 마지막에 교체하는 편이 낫습니다.
+`X-MEMBER-ID` 헤더로 가다가 마지막에 교체하는 편이 낫습니다.
 
 **커밋은 Phase 단위보다 잘게.** 도메인 하나가 컨트롤러까지 통했을 때가 적당한 단위입니다.

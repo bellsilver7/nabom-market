@@ -17,4 +17,6 @@ public interface ProductMapper {
     int update(Product product);
 
     int deleteById(Long id);
+
+    boolean existsById(Long id);
 }

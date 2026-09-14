@@ -36,4 +36,12 @@
         DELETE FROM product WHERE id = #{id}
     </delete>
 
+    <select id="existsById">
+        SELECT EXISTS (
+            SELECT 1
+            FROM product
+            WHERE id = #{id}
+        )
+    </select>
+
 </mapper>

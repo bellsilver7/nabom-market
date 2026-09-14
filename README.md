@@ -187,7 +187,7 @@ UPDATE product
 
 ## API
 
-인증은 아직 도입 전이며, 임시로 `X-USER-ID` 헤더로 사용자를 식별합니다.
+인증은 아직 도입 전이며, 임시로 `X-MEMBER-ID` 헤더로 사용자를 식별합니다.
 
 ### 상품
 
@@ -325,7 +325,7 @@ Mapper 인터페이스는 도메인 패키지에, XML은 `resources/mapper`에 �
 
 ## 앞으로
 
-- [ ] Spring Security + JWT 기반 인증 도입 (`X-USER-ID` 헤더 제거)
+- [ ] Spring Security + JWT 기반 인증 도입 (`X-MEMBER-ID` 헤더 제거)
 - [ ] 동시 주문 부하 테스트 — 조건부 UPDATE 방식의 재고 정합성 검증
 - [ ] 상품 검색 — 동적 쿼리(`<if>`, `<foreach>`)로 다중 조건 필터
 - [ ] 조회 성능 개선 — 인기 상품 Redis 캐싱
