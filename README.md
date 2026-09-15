@@ -85,8 +85,7 @@ Spring Boot BOM이 관리하지 않는 두 라이브러리는 `build.gradle.kts`
 
 - [x] 상품 등록 / 수정 / 삭제
 - [x] 상품 단건 조회
-- [x] 상품 목록 조회
-- [ ] 페이징 및 검색
+- [x] 상품 목록 조회 — 검색, 정렬, 페이징
 
 **장바구니**
 
@@ -115,7 +114,7 @@ Spring Boot BOM이 관리하지 않는 두 라이브러리는 `build.gradle.kts`
 - [x] 요청 값 검증 (`@Valid`)
 - [x] Flyway 마이그레이션
 - [x] Swagger 문서화
-- [x] Testcontainers 기반 API 테스트 (인증·상품·장바구니·주문 55건)
+- [x] Testcontainers 기반 API 테스트 (인증·상품·장바구니·주문 90건)
 
 <br>
 
@@ -229,7 +228,7 @@ UPDATE product
 
 | Method | Endpoint | 설명 | 인증 |
 |---|---|---|---|
-| `GET` | `/api/v1/products` | 상품 목록 조회 | — |
+| `GET` | `/api/v1/products` | 상품 검색 / 목록 조회 | — |
 | `GET` | `/api/v1/products/{id}` | 상품 단건 조회 | — |
 | `POST` | `/api/v1/products` | 상품 등록 | — |
 | `PUT` | `/api/v1/products/{id}` | 상품 수정 | — |
@@ -237,6 +236,31 @@ UPDATE product
 
 쓰기 작업은 원래 관리자만 할 수 있어야 하지만, 역할(role) 개념이 아직 없어
 전부 열어 둔 상태입니다.
+
+**목록 조회 파라미터** — 전부 선택이며, 주지 않으면 전체를 최신순으로 내려줍니다.
+
+| 파라미터 | 기본값 | 설명 |
+|---|---|---|
+| `keyword` | — | 상품명 부분 일치. `%`, `_` 는 문자 그대로 취급 |
+| `minPrice` / `maxPrice` | — | 가격 범위, 양끝 포함 |
+| `inStock` | `false` | `true` 면 재고 0 인 상품 제외 |
+| `sort` | `latest` | `price_asc`, `price_desc`. 모르는 값이면 `latest` |
+| `page` | `0` | 0부터 시작 |
+| `size` | `20` | 최대 `100` |
+
+```json
+// GET /api/v1/products?keyword=원두&sort=price_asc&size=2
+{
+  "content": [
+    { "id": 2, "name": "유기농 원두 에티오피아 예가체프 200g", "price": 18500, "stock": 120 }
+  ],
+  "page": 0,
+  "size": 2,
+  "totalElements": 1,
+  "totalPages": 1,
+  "hasNext": false
+}
+```
 
 ### 장바구니
 
@@ -447,6 +471,56 @@ Mapper 인터페이스는 도메인 패키지에, XML은 `resources/mapper`에 �
   `INSERT INTO member`가 깨졌다. 마이그레이션은 애플리케이션 코드만 보고 넘어가면
   나중에 테스트에서 물린다.
 
+### `Set.of()` 의 `contains(null)` 은 `false` 가 아니라 NPE
+
+- **상황** — 검색 조건 record 의 compact 생성자에서 정렬값을 검증했는데,
+  `sort` 파라미터를 주지 않은 모든 요청이 500 으로 죽었다.
+
+  ```java
+  private static final Set<String> SORTS = Set.of("latest", "price_asc", "price_desc");
+  sort = SORTS.contains(sort) ? sort : "latest";   // sort 가 null 이면 터진다
+  ```
+- **원인** — `Set.of`, `List.of`, `Map.of` 로 만든 불변 컬렉션은 null 을 **담지도 조회하지도**
+  못한다. 내부에서 `Objects.requireNonNull(o)` 로 막는다.
+  null 을 원소로 허용하는 `HashSet` 의 `contains(null)` 이 `false` 를 주는 것과 다르다.
+- **해결** — `sort != null && SORTS.contains(sort)` 로 순서를 바꿨다.
+- **배운 것** — 같은 이름의 메서드라도 구현체에 따라 null 계약이 다르다.
+  "인터페이스가 같으니 동작도 같겠지"가 통하지 않는 자리가 있다.
+
+### `#{}` 는 SQL 인젝션은 막지만 LIKE 와일드카드는 막지 못한다
+
+- **상황** — 상품명 검색에 `%` 를 넣으면 전체 목록이 나왔다.
+  `#{}` 를 썼으니 안전하다고 생각했다.
+- **원인** — `#{}` 는 값을 PreparedStatement 파라미터로 따로 보내므로 쿼리 **구조**는 못 바꾼다.
+  하지만 LIKE 패턴 **안에서의 의미**까지 막아주지는 않는다.
+  `CONCAT('%', '%', '%')` 는 `'%%%'` 가 되고, 이건 "아무거나"다.
+  `_` 도 마찬가지라 `한_판` 이 `한정판` 을 찾아낸다.
+- **해결** — 자바에서 `%`, `_` 를 이스케이프하고 SQL 에 `ESCAPE '!'` 를 명시했다.
+  이스케이프 문자 자신(`!` → `!!`)을 **가장 먼저** 치환해야 한다.
+  나중에 하면 앞서 만든 `!%` 가 `!!%` 로 망가진다.
+
+  ```java
+  keyword.replace("!", "!!").replace("%", "!%").replace("_", "!_")
+  ```
+- **배운 것** — 인젝션 방어와 와일드카드 처리는 다른 문제다.
+  실사용에서는 `50% 할인 쿠폰` 을 `50%` 로 검색할 때 드러난다.
+
+### 정렬 컬럼은 `${}` 가 아니라 분기로 고른다
+
+`#{}` 는 컬럼명 자리에 쓸 수 없고, `${}` 는 문자열을 그대로 SQL 에 붙여 넣어 인젝션이 된다.
+그래서 정렬은 미리 정해둔 선택지 중에서 고르는 형태여야 한다.
+
+```xml
+<choose>
+    <when test="sort == 'price_asc'">  ORDER BY price ASC, id DESC  </when>
+    <when test="sort == 'price_desc'"> ORDER BY price DESC, id DESC </when>
+    <otherwise>                        ORDER BY created_at DESC, id DESC </otherwise>
+</choose>
+```
+
+목록 쿼리와 `COUNT` 쿼리는 `<sql>` 조각으로 `WHERE` 를 공유한다.
+복사해서 두 벌 두면 한쪽만 고치는 순간 `totalElements` 가 조용히 어긋난다.
+
 ### 주문 시점 가격을 복사해 두는 이유
 
 `order_item.order_price`는 주문 시점의 상품 단가를 복사한 값이다.
@@ -461,6 +535,5 @@ Mapper 인터페이스는 도메인 패키지에, XML은 `resources/mapper`에 �
 - [ ] 관리자 역할 — 상품 쓰기 작업을 `ADMIN`으로 제한
 - [ ] 장바구니 비우기 (`DELETE /api/v1/cart/items`)
 - [ ] 동시 주문 부하 테스트 — 조건부 UPDATE 방식의 재고 정합성 검증
-- [ ] 상품 검색과 페이징 — 동적 쿼리 `<if>`, `<foreach>`
 - [ ] 인기 상품 Redis 캐싱
 - [ ] GitHub Actions CI (빌드 + 테스트)

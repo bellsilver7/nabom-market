@@ -22,12 +22,6 @@
         WHERE id = #{id}
     </select>
 
-    <select id="findAll" resultType="Product">
-        SELECT <include refid="columns" />
-        FROM product
-        ORDER BY id DESC
-    </select>
-
     <select id="search" resultType="Product">
         SELECT <include refid="columns" />
         FROM product

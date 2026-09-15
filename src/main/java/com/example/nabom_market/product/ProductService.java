@@ -22,12 +22,6 @@ public class ProductService {
 
     private final ProductMapper productMapper;
 
-    public List<ProductResponse> findAll() {
-        return productMapper.findAll().stream()
-                .map(ProductResponse::from)
-                .toList();
-    }
-
     public PageResponse<ProductResponse> search(ProductSearchCondition condition) {
         List<ProductResponse> content = productMapper.search(condition).stream()
                 .map(ProductResponse::from)
@@ -36,7 +30,6 @@ public class ProductService {
         long totalElements = productMapper.countBySearch(condition);
 
         return PageResponse.of(content, condition.page(), condition.size(), totalElements);
-
     }
 
     public ProductResponse findById(Long id) {
