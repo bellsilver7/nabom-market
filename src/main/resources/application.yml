@@ -18,6 +18,9 @@ mybatis:
 jwt:
   secret: ${JWT_SECRET:nabom-market-local-development-secret-key-do-not-use-in-production}
   expiration-minutes: 60
+  # 리프레시 토큰은 JWT 가 아니라 DB(refresh_token)에 해시로 저장되는 난수다.
+  # 여기 값은 그 행의 expires_at 을 계산할 때만 쓴다.
+  refresh-expiration-days: 14
 
 springdoc:
   swagger-ui:
