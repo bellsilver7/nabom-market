@@ -107,7 +107,8 @@ Spring Boot BOM이 관리하지 않는 두 라이브러리는 `build.gradle.kts`
 - [x] 토큰 검증 필터 + 인증 실패 401 응답
 - [x] `@LoginMember` 로 컨트롤러에 회원 id 주입
 - [x] 관리자 역할 — 상품 쓰기 작업을 `ADMIN` 으로 제한
-- [ ] 리프레시 토큰 / 토큰 무효화
+- [x] 리프레시 토큰 — 재발급마다 회전, 재사용되면 그 회원의 토큰을 전부 폐기
+- [x] 로그아웃 — 리프레시 토큰 폐기
 
 **공통**
 
@@ -115,8 +116,8 @@ Spring Boot BOM이 관리하지 않는 두 라이브러리는 `build.gradle.kts`
 - [x] 요청 값 검증 (`@Valid`)
 - [x] Flyway 마이그레이션
 - [x] Swagger 문서화
-- [x] Testcontainers 기반 API 테스트 (인증·상품·장바구니·주문 97건)
-- [x] 동시 주문 / 동시 취소 재고 정합성 테스트 (7건)
+- [x] Testcontainers 기반 API 테스트 (인증·상품·장바구니·주문 110건)
+- [x] 동시 주문 / 동시 취소 재고 정합성 테스트 (6건)
 
 <br>
 
@@ -126,6 +127,7 @@ Spring Boot BOM이 관리하지 않는 두 라이브러리는 `build.gradle.kts`
 erDiagram
     member ||--o{ orders : places
     member ||--|| cart : owns
+    member ||--o{ refresh_token : holds
     cart ||--o{ cart_item : contains
     orders ||--o{ order_item : contains
     product ||--o{ cart_item : referenced_by
@@ -138,6 +140,13 @@ erDiagram
         varchar name
         varchar role
         datetime created_at
+    }
+    refresh_token {
+        bigint id PK
+        bigint member_id FK
+        char token_hash
+        datetime expires_at
+        datetime revoked_at
     }
     product {
         bigint id PK
@@ -173,6 +182,18 @@ erDiagram
 ```
 
 ### 설계 노트
+
+**`refresh_token.token_hash` — 원문을 두지 않는 이유**
+
+리프레시 토큰은 그 자체로 액세스 토큰을 받아올 수 있는 자격 증명입니다.
+원문을 저장하면 이 테이블이 새는 순간 모든 회원의 세션이 같이 샙니다.
+비밀번호와 같은 이유로 해시만 남기되, BCrypt 가 아니라 SHA-256 을 씁니다 —
+솔트가 붙으면 매번 다른 해시가 나와 조회 키로 쓸 수 없고,
+사람이 고른 문자열이 아니라 난수 256비트라 사전 공격의 대상이 아니기 때문입니다.
+
+폐기한 행은 지우지 않고 `revoked_at` 을 채웁니다.
+행이 아예 없으면 위조지만, 있는데 폐기되어 있으면 **이미 쓴 토큰이 다시 온 것**입니다.
+그 둘을 구분할 수 있어야 탈취를 탐지합니다.
 
 **`order_item.order_price` — 주문 시점 가격의 스냅샷**
 
@@ -216,16 +237,37 @@ UPDATE product
 | Method | Endpoint | 설명 | 인증 |
 |---|---|---|---|
 | `POST` | `/api/v1/auth/signup` | 회원가입 | — |
-| `POST` | `/api/v1/auth/login` | 로그인, 액세스 토큰 발급 | — |
+| `POST` | `/api/v1/auth/login` | 로그인, 토큰 한 쌍 발급 | — |
+| `POST` | `/api/v1/auth/refresh` | 액세스 토큰 재발급 | — |
+| `POST` | `/api/v1/auth/logout` | 리프레시 토큰 폐기 | — |
 
 ```json
 // POST /api/v1/auth/login 응답
 {
   "accessToken": "eyJhbGciOiJIUzI1NiJ9...",
+  "refreshToken": "9xQk1H0m...",
   "tokenType": "Bearer",
   "expiresIn": 3600
 }
 ```
+
+액세스 토큰은 1시간, 리프레시 토큰은 14일입니다.
+`expiresIn` 은 액세스 토큰의 남은 초이고, 그게 만료되면 재발급을 요청합니다.
+
+```json
+// POST /api/v1/auth/refresh 요청 — 로그아웃도 같은 본문을 받습니다
+{ "refreshToken": "9xQk1H0m..." }
+```
+
+**재발급은 회전(rotation)입니다.** 쓴 리프레시 토큰은 그 자리에서 폐기되고 새 토큰이 함께 나갑니다.
+그래서 클라이언트는 응답의 리프레시 토큰을 매번 갈아 끼워야 합니다.
+없는 토큰, 만료된 토큰, 이미 쓴 토큰은 전부 같은 `401` 입니다 — 무엇이 틀렸는지 알려주지 않습니다.
+
+**로그아웃해도 이미 발급된 액세스 토큰은 만료까지 살아 있습니다.**
+서명만 맞으면 통과하는 물건이라 서버가 회수할 방법이 없습니다.
+재발급 경로가 끊기므로 남은 시간이 지나면 다시 로그인해야 합니다.
+정확히 끊으려면 매 요청마다 폐기 목록을 조회해야 하고, 그러면 무상태가 아니게 됩니다.
+이 프로젝트는 액세스 토큰 수명을 짧게 두는 쪽을 택했습니다.
 
 ### 상품
 
@@ -621,11 +663,61 @@ Security 필터 → 인가 판단 → DispatcherServlet → @Valid 검증 → �
 조회할 때 `product.price`를 조인하면, 상품 가격이 바뀌는 순간 **과거 주문의 결제 금액까지 바뀐다.**
 테스트로 고정해 두었다 — 주문 후 상품 가격을 두 배로 올려도 주문 상세의 금액은 그대로다.
 
+### 예외를 던지면 방금 한 폐기까지 롤백된다
+
+- **상황** — 리프레시 토큰 재사용 탐지를 붙였다.
+  이미 쓴 토큰이 다시 오면 탈취로 보고 그 회원의 토큰을 **전부** 폐기한 뒤 `401` 을 준다.
+
+  ```java
+  if (stored.isRevoked()) {
+      refreshTokenMapper.revokeAllByMemberId(memberId);   // 전부 폐기
+      throw unauthorized(...);                            // ← 이게 위를 되돌린다
+  }
+  ```
+- **원인** — `BusinessException` 은 `RuntimeException` 이고, Spring 은 그걸 롤백 신호로 쓴다.
+  **응답은 `401` 인데 DB 의 토큰은 전부 멀쩡히 살아 있는 상태**가 된다.
+  탈취범이 쓴 토큰 한 장만 막히고, 정작 중요한 연쇄 폐기는 없던 일이 된다.
+- **해결** — 폐기만 별도 트랜잭션으로 커밋한다.
+
+  ```java
+  revokeInNewTransaction.executeWithoutResult(   // PROPAGATION_REQUIRES_NEW
+          status -> refreshTokenMapper.revokeAllByMemberId(memberId));
+  ```
+
+  여기까지 오는 경로에서 바깥 트랜잭션이 한 일은 `SELECT` 하나뿐이다.
+  InnoDB 의 일반 조회는 잠금을 잡지 않으므로 새 트랜잭션과 서로 기다리지 않는다.
+- **테스트가 아니었으면 못 봤다.** `401` 만 확인했다면 통과했을 코드다.
+  "그다음 진짜 사용자의 토큰도 막히는가"까지 봤기 때문에 잡혔다.
+
+  ```java
+  refresh(first).andExpect(status().isUnauthorized());    // 여기까진 통과했다
+  refresh(second).andExpect(status().isUnauthorized());   // 200 이 나왔다
+  ```
+
+### 매퍼 XML 하나가 깨지면 전부 죽는다
+
+- **상황** — 새 매퍼 XML 을 쓰다가 자바 필드 선언을 그대로 붙여넣었다.
+  기동하니 `RefreshTokenMapper` 가 아니라 **`MemberMapper` 를 만들지 못했다**는 에러가 났다.
+- **원인** — 매퍼 XML 은 전부 하나의 `SqlSessionFactory` 로 들어간다.
+  그중 하나가 파싱에 실패하면 팩터리 자체가 만들어지지 않고, 그걸 쓰는 매퍼 전부가 같이 죽는다.
+  아직 아무도 주입받지 않는 매퍼여도 마찬가지다.
+- **덤** — MyBatis 는 DTD 검증을 켜고 파싱한다. DTD 에 없는 속성 하나로도 같은 일이 벌어진다.
+  `<update>` 에 `resultType` 을 쓸 수 없다는 걸 이렇게 알았다
+  (UPDATE 는 영향 행 수를 돌려주고, 인터페이스 반환 타입이 `boolean` 이면 MyBatis 가 알아서 바꾼다).
+- **에러가 가리키는 줄을 믿지 말 것.**
+
+  ```
+  SAXParseException; lineNumber: 34
+  요소 유형 "mapper"의 콘텐츠는 "(cache-ref|cache|resultMap*|...)+"과(와) 일치해야 합니다.
+  ```
+
+  34줄은 닫는 태그다. 콘텐츠 모델 위반은 "여기서 어긋났다"가 아니라
+  "다 읽고 보니 안 맞았다"로 보고된다. 실제 원인은 한참 위에 있다.
+
 <br>
 
 ## 앞으로
 
-- [ ] 리프레시 토큰과 로그아웃 — 지금은 액세스 토큰 1시간이 전부다
 - [ ] 장바구니 비우기 (`DELETE /api/v1/cart/items`)
 - [ ] 인기 상품 Redis 캐싱
 - [ ] GitHub Actions CI (빌드 + 테스트)
