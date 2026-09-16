@@ -8,6 +8,8 @@ import com.example.nabom_market.member.domain.Member;
 
 @Mapper
 public interface MemberMapper {
+    Optional<Member> findById(Long id);
+
     Optional<Member> findByEmail(String email);
 
     boolean existsByEmail(String email);

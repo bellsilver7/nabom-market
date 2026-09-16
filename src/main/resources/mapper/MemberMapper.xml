@@ -7,6 +7,12 @@
         id, email, password, name, role, created_at
     </sql>
 
+    <select id="findById" resultType="Member">
+        SELECT <include refid="columns"/>
+        FROM member
+        WHERE id = #{id}
+    </select>
+
     <select id="findByEmail" resultType="Member">
         SELECT <include refid="columns"/>
         FROM member
