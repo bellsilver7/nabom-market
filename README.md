@@ -106,6 +106,7 @@ Spring Boot BOM이 관리하지 않는 두 라이브러리는 `build.gradle.kts`
 - [x] 로그인 — JWT 액세스 토큰 발급
 - [x] 토큰 검증 필터 + 인증 실패 401 응답
 - [x] `@LoginMember` 로 컨트롤러에 회원 id 주입
+- [x] 관리자 역할 — 상품 쓰기 작업을 `ADMIN` 으로 제한
 - [ ] 리프레시 토큰 / 토큰 무효화
 
 **공통**
@@ -114,8 +115,8 @@ Spring Boot BOM이 관리하지 않는 두 라이브러리는 `build.gradle.kts`
 - [x] 요청 값 검증 (`@Valid`)
 - [x] Flyway 마이그레이션
 - [x] Swagger 문서화
-- [x] Testcontainers 기반 API 테스트 (인증·상품·장바구니·주문 90건)
-- [x] 동시 주문 / 동시 취소 재고 정합성 테스트 (6건)
+- [x] Testcontainers 기반 API 테스트 (인증·상품·장바구니·주문 97건)
+- [x] 동시 주문 / 동시 취소 재고 정합성 테스트 (7건)
 
 <br>
 
@@ -135,6 +136,7 @@ erDiagram
         varchar email
         varchar password
         varchar name
+        varchar role
         datetime created_at
     }
     product {
@@ -231,12 +233,12 @@ UPDATE product
 |---|---|---|---|
 | `GET` | `/api/v1/products` | 상품 검색 / 목록 조회 | — |
 | `GET` | `/api/v1/products/{id}` | 상품 단건 조회 | — |
-| `POST` | `/api/v1/products` | 상품 등록 | — |
-| `PUT` | `/api/v1/products/{id}` | 상품 수정 | — |
-| `DELETE` | `/api/v1/products/{id}` | 상품 삭제 | — |
+| `POST` | `/api/v1/products` | 상품 등록 | `ADMIN` |
+| `PUT` | `/api/v1/products/{id}` | 상품 수정 | `ADMIN` |
+| `DELETE` | `/api/v1/products/{id}` | 상품 삭제 | `ADMIN` |
 
-쓰기 작업은 원래 관리자만 할 수 있어야 하지만, 역할(role) 개념이 아직 없어
-전부 열어 둔 상태입니다.
+조회는 공개, 쓰기는 관리자 전용입니다. 토큰이 없으면 `401`, 일반 회원이면 `403` 입니다.
+관리자는 마이그레이션으로만 만들어집니다 — 회원가입은 언제나 `USER` 입니다.
 
 **목록 조회 파라미터** — 전부 선택이며, 주지 않으면 전체를 최신순으로 내려줍니다.
 
@@ -297,6 +299,7 @@ UPDATE product
 |---|---|---|
 | 요청 값 검증 실패 | `400` | `INVALID_REQUEST` |
 | 토큰이 없거나 유효하지 않음 | `401` | `UNAUTHORIZED` |
+| 권한이 모자람 | `403` | `FORBIDDEN` |
 | 리소스 없음 | `404` | `NOT_FOUND` |
 | 재고 부족 | `409` | `OUT_OF_STOCK` |
 | 취소 불가한 주문 | `409` | `INVALID_ORDER_STATUS` |
@@ -565,6 +568,53 @@ Mapper 인터페이스는 도메인 패키지에, XML은 `resources/mapper`에 �
 - **MockMvc 대신 서비스를 직접 호출한다.** 검증 대상이 DB 수준의 정합성이라
   서블릿 계층을 거친다고 증거가 늘지 않는다.
 
+### `authorizeHttpRequests` 는 처음 일치하는 규칙 하나만 적용한다
+
+- **상황** — 상품 쓰기를 관리자 전용으로 바꿨는데, 토큰 없이 등록해도 `201` 이 나왔다.
+
+  ```java
+  .requestMatchers("/api/v1/products/**").permitAll()        // 여기서 끝난다
+  .requestMatchers("/api/v1/products/**").hasRole("ADMIN")   // 도달하지 못한다
+  ```
+- **원인** — 방화벽 규칙처럼 위에서부터 훑다가 처음 맞는 것 하나만 적용하고 멈춘다.
+  넓은 규칙이 위에 있으면 아래는 죽은 줄이 된다.
+  **Spring 은 도달 불가능한 규칙을 경고해 주지 않는다.**
+  설정은 그럴듯해 보이는데 실제로는 아무것도 막지 않는 상태가 된다.
+- **해결** — 조회만 열고 나머지를 잠근다. 좁은 규칙을 위로 올린다.
+
+  ```java
+  .requestMatchers(HttpMethod.GET, "/api/v1/products/**").permitAll()
+  .requestMatchers("/api/v1/products/**").hasRole("ADMIN")
+  ```
+- **덤** — 권한을 부여할 때 `ROLE_` 접두사를 빠뜨리면 `hasRole("ADMIN")` 이 조용히 실패한다.
+  `hasRole` 은 내부적으로 `ROLE_ADMIN` 을 찾기 때문이다. 증상은 원인을 전혀 알려주지 않는 403 이다.
+
+### 인가는 검증보다 먼저 일어난다
+
+권한 없는 요청에 잘못된 본문을 실어 보내면 `400` 이 아니라 `403` 이 돌아온다.
+
+```
+Security 필터 → 인가 판단 → DispatcherServlet → @Valid 검증 → 컨트롤러
+```
+
+이게 옳은 순서다. `400` 을 주면 "당신이 보낸 값의 형식이 틀렸다"는 말이 되고,
+그건 **그 API 가 어떤 값을 받는지 알려주는 것**이다.
+같은 이유로 없는 리소스에 대해서도 `404` 가 아니라 `403` 이 먼저 나가야 한다.
+순서가 뒤집히면 권한 없는 사람이 응답 코드 차이로 리소스 존재 여부를 알아낼 수 있다.
+
+### 같은 이름 다른 패키지 — 자동 import 를 믿지 말 것
+
+이 프로젝트에서만 네 번 걸렸다.
+
+| 무엇 | IDE 가 고른 것 | 맞는 것 |
+|---|---|---|
+| `TestcontainersConfiguration` | `org.testcontainers.utility` | 프로젝트의 테스트 설정 클래스 |
+| `@Value` | `lombok.Value` | `org.springframework.beans.factory.annotation.Value` |
+| `ObjectMapper` (2회) | `com.fasterxml.jackson.databind` | `tools.jackson.databind` (Boot 4 는 Jackson 3) |
+
+넷 다 **컴파일은 통과했고** 기동 시점이나 런타임에 터졌다.
+`Value`, `ObjectMapper`, `Order` 처럼 흔한 이름일수록 자동 import 가 채운 줄을 한 번 봐야 한다.
+
 ### 주문 시점 가격을 복사해 두는 이유
 
 `order_item.order_price`는 주문 시점의 상품 단가를 복사한 값이다.
@@ -576,7 +626,6 @@ Mapper 인터페이스는 도메인 패키지에, XML은 `resources/mapper`에 �
 ## 앞으로
 
 - [ ] 리프레시 토큰과 로그아웃 — 지금은 액세스 토큰 1시간이 전부다
-- [ ] 관리자 역할 — 상품 쓰기 작업을 `ADMIN`으로 제한
 - [ ] 장바구니 비우기 (`DELETE /api/v1/cart/items`)
 - [ ] 인기 상품 Redis 캐싱
 - [ ] GitHub Actions CI (빌드 + 테스트)

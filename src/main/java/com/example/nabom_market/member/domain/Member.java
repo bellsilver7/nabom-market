@@ -14,11 +14,13 @@ public class Member {
     String email;
     String password;
     String name;
+    Role role;
     LocalDateTime createdAt;
 
     public Member(String email, String encodedPassword, String name) {
         this.email = email;
         this.password = encodedPassword;
         this.name = name;
+        this.role = Role.USER;
     }
 }

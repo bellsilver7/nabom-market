@@ -43,6 +43,8 @@ public class AuthService {
                 .filter(m -> passwordEncoder.matches(request.password(), m.getPassword()))
                 .orElseThrow(() -> new BusinessException(ErrorCode.UNAUTHORIZED, "이메일 또는 비밀번호가 올바르지 않습니다."));
 
-        return TokenResponse.of(jwtProvider.createToken(member.getId()), jwtProvider.getExpiresInSeconds());
+        return TokenResponse.of(
+                jwtProvider.createToken(member.getId(), member.getRole()),
+                jwtProvider.getExpiresInSeconds());
     }
 }

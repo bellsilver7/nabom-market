@@ -22,6 +22,8 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.example.nabom_market.TestcontainersConfiguration;
+import com.example.nabom_market.common.security.JwtProvider;
+import com.example.nabom_market.member.domain.Role;
 
 /**
  * 상품 API 명세 검증.
@@ -54,12 +56,28 @@ import com.example.nabom_market.TestcontainersConfiguration;
 class ProductApiTest {
 
     private static final String PRODUCTS = "/api/v1/products";
+    private static final String AUTH = "Authorization";
+
+    /** 샘플 데이터의 회원 1 은 USER, 회원 3 은 ADMIN 이다. */
+    private static final long USER_ID = 1L;
+    private static final long ADMIN_ID = 3L;
 
     @Autowired
     private MockMvc mockMvc;
 
     @Autowired
     private JdbcTemplate jdbcTemplate;
+
+    @Autowired
+    private JwtProvider jwtProvider;
+
+    private String adminToken() {
+        return "Bearer " + jwtProvider.createToken(ADMIN_ID, Role.ADMIN);
+    }
+
+    private String userToken() {
+        return "Bearer " + jwtProvider.createToken(USER_ID, Role.USER);
+    }
 
     @BeforeEach
     void setUp() {
@@ -382,6 +400,7 @@ class ProductApiTest {
         @DisplayName("생성하고 Location 헤더를 준다")
         void creates() throws Exception {
             mockMvc.perform(post(PRODUCTS)
+                    .header(AUTH, adminToken())
                     .contentType(MediaType.APPLICATION_JSON)
                     .content(productBody("참나무 트레이", 38000, 12)))
                     .andExpect(status().isCreated())
@@ -395,6 +414,7 @@ class ProductApiTest {
         @DisplayName("등록한 상품은 검색된다")
         void createdIsSearchable() throws Exception {
             mockMvc.perform(post(PRODUCTS)
+                    .header(AUTH, adminToken())
                     .contentType(MediaType.APPLICATION_JSON)
                     .content(productBody("참나무 트레이", 38000, 12)))
                     .andExpect(status().isCreated());
@@ -407,6 +427,7 @@ class ProductApiTest {
         @DisplayName("상품명이 비면 400")
         void blankNameIsBadRequest() throws Exception {
             mockMvc.perform(post(PRODUCTS)
+                    .header(AUTH, adminToken())
                     .contentType(MediaType.APPLICATION_JSON)
                     .content(productBody("", 38000, 12)))
                     .andExpect(status().isBadRequest())
@@ -417,6 +438,7 @@ class ProductApiTest {
         @DisplayName("가격이 음수면 400")
         void negativePriceIsBadRequest() throws Exception {
             mockMvc.perform(post(PRODUCTS)
+                    .header(AUTH, adminToken())
                     .contentType(MediaType.APPLICATION_JSON)
                     .content(productBody("참나무 트레이", -1, 12)))
                     .andExpect(status().isBadRequest());
@@ -426,6 +448,7 @@ class ProductApiTest {
         @DisplayName("가격이 없으면 400")
         void missingPriceIsBadRequest() throws Exception {
             mockMvc.perform(post(PRODUCTS)
+                    .header(AUTH, adminToken())
                     .contentType(MediaType.APPLICATION_JSON)
                     .content("""
                             {"name": "참나무 트레이", "stock": 12}
@@ -443,6 +466,7 @@ class ProductApiTest {
         @DisplayName("수정한 값이 반영된다")
         void updates() throws Exception {
             mockMvc.perform(put(PRODUCTS + "/3")
+                    .header(AUTH, adminToken())
                     .contentType(MediaType.APPLICATION_JSON)
                     .content(productBody("리넨 앞치마 아이보리", 35000, 44)))
                     .andExpect(status().isOk())
@@ -457,6 +481,7 @@ class ProductApiTest {
         @DisplayName("없는 상품은 404")
         void notFound() throws Exception {
             mockMvc.perform(put(PRODUCTS + "/999999")
+                    .header(AUTH, adminToken())
                     .contentType(MediaType.APPLICATION_JSON)
                     .content(productBody("없는 상품", 1000, 1)))
                     .andExpect(status().isNotFound());
@@ -475,7 +500,7 @@ class ProductApiTest {
             Long id = jdbcTemplate.queryForObject(
                     "SELECT id FROM product ORDER BY id DESC LIMIT 1", Long.class);
 
-            mockMvc.perform(delete(PRODUCTS + "/" + id))
+            mockMvc.perform(delete(PRODUCTS + "/" + id).header(AUTH, adminToken()))
                     .andExpect(status().isNoContent());
 
             mockMvc.perform(get(PRODUCTS + "/" + id))
@@ -485,8 +510,79 @@ class ProductApiTest {
         @Test
         @DisplayName("없는 상품은 404")
         void notFound() throws Exception {
-            mockMvc.perform(delete(PRODUCTS + "/999999"))
+            mockMvc.perform(delete(PRODUCTS + "/999999").header(AUTH, adminToken()))
                     .andExpect(status().isNotFound());
+        }
+    }
+
+    // ------------------------------------------------------------------
+    @Nested
+    @DisplayName("권한")
+    class Authorization {
+
+        @Test
+        @DisplayName("조회는 토큰 없이 누구나 할 수 있다")
+        void readIsPublic() throws Exception {
+            mockMvc.perform(get(PRODUCTS))
+                    .andExpect(status().isOk());
+
+            mockMvc.perform(get(PRODUCTS + "/1"))
+                    .andExpect(status().isOk());
+        }
+
+        @Test
+        @DisplayName("토큰 없이 등록하면 401")
+        void createWithoutTokenIsUnauthorized() throws Exception {
+            mockMvc.perform(post(PRODUCTS)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(productBody("몰래 등록", 1000, 1)))
+                    .andExpect(status().isUnauthorized())
+                    .andExpect(jsonPath("$.code").value("UNAUTHORIZED"));
+        }
+
+        @Test
+        @DisplayName("일반 회원이 등록하면 403")
+        void createByUserIsForbidden() throws Exception {
+            mockMvc.perform(post(PRODUCTS)
+                    .header(AUTH, userToken())
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(productBody("일반 회원이 등록", 1000, 1)))
+                    .andExpect(status().isForbidden())
+                    .andExpect(jsonPath("$.code").value("FORBIDDEN"));
+        }
+
+        @Test
+        @DisplayName("일반 회원이 수정하면 403")
+        void updateByUserIsForbidden() throws Exception {
+            mockMvc.perform(put(PRODUCTS + "/3")
+                    .header(AUTH, userToken())
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(productBody("마음대로 수정", 1000, 1)))
+                    .andExpect(status().isForbidden());
+        }
+
+        @Test
+        @DisplayName("일반 회원이 삭제하면 403")
+        void deleteByUserIsForbidden() throws Exception {
+            mockMvc.perform(delete(PRODUCTS + "/3").header(AUTH, userToken()))
+                    .andExpect(status().isForbidden());
+        }
+
+        @Test
+        @DisplayName("403 으로 막힌 요청은 데이터를 바꾸지 않는다")
+        void forbiddenRequestChangesNothing() throws Exception {
+            mockMvc.perform(delete(PRODUCTS + "/3").header(AUTH, userToken()))
+                    .andExpect(status().isForbidden());
+
+            mockMvc.perform(get(PRODUCTS + "/3"))
+                    .andExpect(status().isOk());
+        }
+
+        @Test
+        @DisplayName("없는 상품이어도 권한이 먼저 걸린다 — 404 가 아니라 403")
+        void authorizationPrecedesExistenceCheck() throws Exception {
+            mockMvc.perform(delete(PRODUCTS + "/999999").header(AUTH, userToken()))
+                    .andExpect(status().isForbidden());
         }
     }
 }

@@ -4,7 +4,7 @@
 <mapper namespace="com.example.nabom_market.member.mapper.MemberMapper">
 
     <sql id="columns">
-        id, email, password, name, created_at
+        id, email, password, name, role, created_at
     </sql>
 
     <select id="findByEmail" resultType="Member">

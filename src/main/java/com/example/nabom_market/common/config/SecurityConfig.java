@@ -2,6 +2,7 @@ package com.example.nabom_market.common.config;
 
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpMethod;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.config.http.SessionCreationPolicy;
@@ -10,6 +11,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 
+import com.example.nabom_market.common.security.JwtAccessDeniedHandler;
 import com.example.nabom_market.common.security.JwtAuthenticationEntryPoint;
 import com.example.nabom_market.common.security.JwtAuthenticationFilter;
 
@@ -33,6 +35,7 @@ public class SecurityConfig {
 
 	private final JwtAuthenticationFilter jwtAuthenticationFilter;
 	private final JwtAuthenticationEntryPoint jwtAuthenticationEntryPoint;
+	private final JwtAccessDeniedHandler jwtAccessDeniedHandler;
 
 	@Bean
 	PasswordEncoder passwordEncoder() {
@@ -48,11 +51,14 @@ public class SecurityConfig {
 				.sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
 				.authorizeHttpRequests(auth -> auth
 						.requestMatchers("/api/v1/auth/**").permitAll()
-						.requestMatchers("/api/v1/products/**").permitAll()
+						.requestMatchers(HttpMethod.GET, "/api/v1/products/**").permitAll()
+						.requestMatchers("/api/v1/products/**").hasRole("ADMIN")
 						.requestMatchers("/swagger-ui/**", "/swagger-ui.html", "/v3/api-docs/**").permitAll()
 						.requestMatchers("/actuator/**").permitAll()
 						.anyRequest().authenticated())
-				.exceptionHandling(e -> e.authenticationEntryPoint(jwtAuthenticationEntryPoint))
+				.exceptionHandling(e -> e
+						.authenticationEntryPoint(jwtAuthenticationEntryPoint)
+						.accessDeniedHandler(jwtAccessDeniedHandler))
 				.addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
 				.build();
 	}

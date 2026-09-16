@@ -10,6 +10,8 @@ import javax.crypto.SecretKey;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
+import com.example.nabom_market.member.domain.Role;
+
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.security.Keys;
 
@@ -26,10 +28,15 @@ public class JwtProvider {
         this.expirationMinutes = expirationMinutes;
     }
 
-    public String createToken(Long memberId) {
+    public String createToken(Long memberId, Role role) {
         Instant now = Instant.now();
-        return Jwts.builder().subject(String.valueOf(memberId)).issuedAt(Date.from(now))
-                .expiration(Date.from(now.plus(expirationMinutes, ChronoUnit.MINUTES))).signWith(key).compact();
+        return Jwts.builder()
+                .subject(String.valueOf(memberId))
+                .claim("role", role.name())
+                .issuedAt(Date.from(now))
+                .expiration(Date.from(now.plus(expirationMinutes, ChronoUnit.MINUTES)))
+                .signWith(key)
+                .compact();
     }
 
     public long getExpiresInSeconds() {
@@ -40,5 +47,15 @@ public class JwtProvider {
         String subject = Jwts.parser().verifyWith(key).build().parseSignedClaims(token).getPayload().getSubject();
 
         return Long.valueOf(subject);
+    }
+
+    public Role getRole(String token) {
+        String role = Jwts.parser()
+                .verifyWith(key)
+                .build()
+                .parseSignedClaims(token)
+                .getPayload()
+                .get("role", String.class);
+        return Role.valueOf(role);
     }
 }

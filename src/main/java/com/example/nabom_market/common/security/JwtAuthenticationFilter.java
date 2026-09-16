@@ -9,9 +9,12 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
+
+import com.example.nabom_market.member.domain.Role;
 
 import io.jsonwebtoken.JwtException;
 import lombok.RequiredArgsConstructor;
@@ -33,7 +36,10 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         if (token != null) {
             try {
                 Long memberId = jwtProvider.getMemberId(token);
-                var authentication = new UsernamePasswordAuthenticationToken(memberId, null, List.of());
+                Role role = jwtProvider.getRole(token);
+
+                var authority = new SimpleGrantedAuthority("ROLE_" + role.name());
+                var authentication = new UsernamePasswordAuthenticationToken(memberId, null, List.of(authority));
                 SecurityContextHolder.getContext().setAuthentication(authentication);
             } catch (JwtException | IllegalArgumentException e) {
                 SecurityContextHolder.clearContext();

@@ -22,6 +22,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import com.example.nabom_market.TestcontainersConfiguration;
 import com.example.nabom_market.common.security.JwtProvider;
+import com.example.nabom_market.member.domain.Role;
 
 /**
  * 장바구니 API 명세 검증.
@@ -60,7 +61,7 @@ class CartApiTest {
 
         /** 해당 회원으로 인증된 Authorization 헤더 값을 만든다. */
         private String bearer(long memberId) {
-                return "Bearer " + jwtProvider.createToken(memberId);
+                return "Bearer " + jwtProvider.createToken(memberId, Role.USER);
         }
 
         @BeforeEach

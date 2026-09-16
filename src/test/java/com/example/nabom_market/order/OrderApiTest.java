@@ -21,6 +21,7 @@ import org.springframework.test.web.servlet.MockMvc;
 
 import com.example.nabom_market.TestcontainersConfiguration;
 import com.example.nabom_market.common.security.JwtProvider;
+import com.example.nabom_market.member.domain.Role;
 
 /**
  * 주문 API 명세 검증.
@@ -55,7 +56,12 @@ class OrderApiTest {
 
     /** 해당 회원으로 인증된 Authorization 헤더 값을 만든다. */
     private String bearer(long memberId) {
-        return "Bearer " + jwtProvider.createToken(memberId);
+        return "Bearer " + jwtProvider.createToken(memberId, Role.USER);
+    }
+
+    /** 상품 가격을 바꾸려면 관리자 권한이 필요하다. (샘플 데이터의 회원 3) */
+    private String adminBearer() {
+        return "Bearer " + jwtProvider.createToken(3L, Role.ADMIN);
     }
 
     @BeforeEach
@@ -147,6 +153,7 @@ class OrderApiTest {
 
             // 상품 가격을 두 배로 인상
             mockMvc.perform(put("/api/v1/products/1")
+                    .header(AUTH, adminBearer())
                     .contentType(MediaType.APPLICATION_JSON)
                     .content("""
                             {"name": "무쇠 주물 프라이팬 24cm", "price": 136000, "stock": 25}

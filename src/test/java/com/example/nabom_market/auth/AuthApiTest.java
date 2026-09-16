@@ -50,8 +50,9 @@ class AuthApiTest {
 
     @BeforeEach
     void setUp() {
-        // 가입 테스트가 만든 회원 정리 (샘플 회원 1번은 남긴다)
-        jdbcTemplate.update("DELETE FROM member WHERE id > 2");
+        // 가입 테스트가 만든 회원 정리
+        // (샘플 회원 1, 검증용 회원 2, 관리자 3 은 남긴다)
+        jdbcTemplate.update("DELETE FROM member WHERE id > 3");
     }
 
     // ------------------------------------------------------------------ helpers
