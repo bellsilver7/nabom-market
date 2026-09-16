@@ -72,9 +72,11 @@ public class OrderService {
 
     @Transactional
     public OrderResponse cancel(Long memberId, Long orderId) {
-        Order order = getOrThrow(memberId, orderId);
-        order.cancel();
-        orderMapper.update(order);
+        getOrThrow(memberId, orderId);
+
+        if (!orderMapper.cancelIfPending(orderId, memberId)) {
+            throw new BusinessException(ErrorCode.INVALID_ORDER_STATUS, "취소할 수 없는 주문입니다.");
+        }
 
         for (OrderItemView view : orderItemMapper.findAllByOrderId(orderId)) {
             productMapper.restoreStock(view.getProductId(), view.getQuantity());

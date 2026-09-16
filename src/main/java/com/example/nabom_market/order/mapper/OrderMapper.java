@@ -18,5 +18,5 @@ public interface OrderMapper {
 
     void insert(Order order);
 
-    void update(Order order);
+    boolean cancelIfPending(@Param("id") Long id, @Param("memberId") Long memberId);
 }

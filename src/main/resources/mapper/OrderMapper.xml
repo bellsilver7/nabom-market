@@ -32,10 +32,10 @@
         VALUES (#{memberId}, #{totalPrice}, #{status})
     </insert>
 
-    <update id="update">
+    <update id="cancelIfPending">
         UPDATE orders
-           SET status = #{status}, total_price = #{totalPrice}
-         WHERE id = #{id}
+           SET status = 'CANCELLED'
+         WHERE id = #{id} AND member_id = #{memberId} AND status = 'PENDING'
     </update>
 
 </mapper>
