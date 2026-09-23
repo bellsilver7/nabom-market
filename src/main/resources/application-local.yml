@@ -1,0 +1,33 @@
+spring:
+  application:
+    name: nabom-market
+
+# DataSource 접속 정보는 spring-boot-docker-compose가
+# compose.yaml을 읽어 자동으로 주입하므로 여기에 적지 않는다.
+
+mybatis:
+  mapper-locations: classpath:mapper/**/*.xml
+  # 이 패키지 아래 클래스는 XML에서 짧은 이름으로 쓸 수 있다.
+  # (resultType="com.example.nabom_market.product.Product" → resultType="Product")
+  type-aliases-package: com.example.nabom_market
+  configuration:
+    map-underscore-to-camel-case: true
+
+# JWT 서명 키. HS256 은 최소 256비트(32바이트) 이상을 요구한다.
+# 운영에서는 반드시 환경변수로 주입하고 저장소에 커밋하지 않는다.
+jwt:
+  secret: ${JWT_SECRET:nabom-market-local-development-secret-key-do-not-use-in-production}
+  expiration-minutes: 60
+  # 리프레시 토큰은 JWT 가 아니라 DB(refresh_token)에 해시로 저장되는 난수다.
+  # 여기 값은 그 행의 expires_at 을 계산할 때만 쓴다.
+  refresh-expiration-days: 14
+
+springdoc:
+  swagger-ui:
+    path: /swagger-ui.html
+    operations-sorter: method
+
+logging:
+  level:
+    # Mapper 인터페이스가 이 패키지 아래에 있으므로 실행되는 SQL이 로그에 찍힌다.
+    com.example.nabom_market: debug

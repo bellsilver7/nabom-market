@@ -33,6 +33,7 @@ dependencies {
 	implementation("org.springframework.boot:spring-boot-starter-validation")
 	implementation("org.springframework.boot:spring-boot-starter-webmvc")
 	implementation("org.flywaydb:flyway-mysql")
+	implementation("org.springframework.boot:spring-boot-starter-data-redis")
 	implementation("org.mybatis.spring.boot:mybatis-spring-boot-starter:$mybatisVersion")
 	implementation("org.springdoc:springdoc-openapi-starter-webmvc-ui:$springdocVersion")
 

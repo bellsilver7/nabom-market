@@ -1,0 +1,26 @@
+spring:
+  application:
+    name: nabom-market
+
+  datasource:
+    url: ${DB_URL}
+    username: ${DB_USERNAME}
+    password: ${DB_PASSWORD}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+
+  data:
+    redis:
+      host: ${REDIS_HOST}
+      port: ${REDIS_PORT:6379}
+
+jwt:
+  secret: ${JWT_SECRET}
+  expiration-minutes: 60
+  refresh-expiration-days: 14
+
+logging:
+  level:
+    root: INFO
+    com.example.nabom_market: debug
+    org.springframework.web: INFO
+    org.mybatis: INFO
